@@ -1,0 +1,13 @@
+project_id = "jkcdofhjuivbxxjdakoa"
+
+[functions.setup-manager]
+verify_jwt = true
+
+[functions.create-branch]
+verify_jwt = true
+
+[functions.verify-branch-pin]
+verify_jwt = true
+
+[functions.create-cashier]
+verify_jwt = true
