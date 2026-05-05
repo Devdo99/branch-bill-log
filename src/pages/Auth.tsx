@@ -45,7 +45,7 @@ export default function Auth() {
       } else {
         const parsed = loginSchema.safeParse(form);
         if (!parsed.success) { toast.error(parsed.error.issues[0].message); return; }
-        const { error } = await supabase.auth.signInWithPassword(parsed.data);
+        const { error } = await supabase.auth.signInWithPassword({ email: parsed.data.email, password: parsed.data.password });
         if (error) { toast.error(error.message); return; }
         toast.success("Berhasil masuk");
         nav("/");
