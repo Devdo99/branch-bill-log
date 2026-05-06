@@ -31,7 +31,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Index />} />
               <Route path="/auth" element={<Auth />} />
-              <Route path="/manager/setup" element={<RequireAuth role="manager"><ManagerSetup /></RequireAuth>} />
+              <Route path="/manager/setup" element={<RequireAuth><ManagerSetup /></RequireAuth>} />
               <Route path="/manager/branches" element={<RequireAuth role="manager"><ManagerBranches /></RequireAuth>} />
               <Route path="/manager/select-branch" element={<RequireAuth role="manager"><SelectBranch /></RequireAuth>} />
               <Route path="/manager" element={<RequireAuth role="manager" requireBranch><ManagerDashboard /></RequireAuth>} />
