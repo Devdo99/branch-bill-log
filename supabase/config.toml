@@ -11,3 +11,9 @@ verify_jwt = true
 
 [functions.create-cashier]
 verify_jwt = true
+
+[functions.list-branches-public]
+verify_jwt = false
+
+[functions.kasir-login]
+verify_jwt = false
