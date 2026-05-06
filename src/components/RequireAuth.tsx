@@ -18,7 +18,9 @@ export default function RequireAuth({ children, role, requireBranch }: Props) {
     return <div className="min-h-screen grid place-items-center text-muted-foreground">Memuat…</div>;
   }
   if (!user) return <Navigate to="/auth" state={{ from: loc }} replace />;
-  if (!userRole) return <Navigate to="/manager/setup" replace />;
+  if (!userRole) {
+    return loc.pathname === "/manager/setup" ? <>{children}</> : <Navigate to="/manager/setup" replace />;
+  }
   if (role && userRole !== role) {
     return <Navigate to={userRole === "manager" ? "/manager/select-branch" : "/kasir"} replace />;
   }
