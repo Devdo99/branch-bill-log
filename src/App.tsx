@@ -12,6 +12,7 @@ import ManagerDashboard from "./pages/ManagerDashboard.tsx";
 import ManagerInvoices from "./pages/ManagerInvoices.tsx";
 import ManagerCashiers from "./pages/ManagerCashiers.tsx";
 import ManagerBranches from "./pages/ManagerBranches.tsx";
+import ManagerSuppliers from "./pages/ManagerSuppliers.tsx";
 import KasirDashboard from "./pages/KasirDashboard.tsx";
 import KasirInputNota from "./pages/KasirInputNota.tsx";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -37,6 +38,7 @@ const App = () => (
               <Route path="/manager" element={<RequireAuth role="manager" requireBranch><ManagerDashboard /></RequireAuth>} />
               <Route path="/manager/invoices" element={<RequireAuth role="manager" requireBranch><ManagerInvoices /></RequireAuth>} />
               <Route path="/manager/cashiers" element={<RequireAuth role="manager" requireBranch><ManagerCashiers /></RequireAuth>} />
+              <Route path="/manager/suppliers" element={<RequireAuth role="manager" requireBranch><ManagerSuppliers /></RequireAuth>} />
               <Route path="/kasir" element={<RequireAuth role="kasir"><KasirDashboard /></RequireAuth>} />
               <Route path="/kasir/input" element={<RequireAuth role="kasir"><KasirInputNota /></RequireAuth>} />
               <Route path="*" element={<NotFound />} />

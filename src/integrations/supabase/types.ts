@@ -182,6 +182,44 @@ export type Database = {
         }
         Relationships: []
       }
+      suppliers: {
+        Row: {
+          branch_id: string
+          created_at: string
+          created_by: string
+          id: string
+          name: string
+          note: string | null
+          updated_at: string
+        }
+        Insert: {
+          branch_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          name: string
+          note?: string | null
+          updated_at?: string
+        }
+        Update: {
+          branch_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          name?: string
+          note?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "suppliers_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_roles: {
         Row: {
           created_at: string
