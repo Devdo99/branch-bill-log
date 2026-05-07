@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import AppShell from "@/components/AppShell";
 import { useAuth } from "@/contexts/AuthContext";
@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { formatRupiah } from "@/lib/format";
 import { Camera, Upload } from "lucide-react";
@@ -31,6 +32,14 @@ export default function KasirInputNota() {
   const [photo, setPhoto] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
+  const [supplierMode, setSupplierMode] = useState<"select" | "new">("select");
+
+  useEffect(() => {
+    if (!cashierBranch) return;
+    supabase.from("suppliers").select("id, name").eq("branch_id", cashierBranch.id).order("name")
+      .then(({ data }) => setSuppliers(data ?? []));
+  }, [cashierBranch?.id]);
 
   const total = (Number(form.qty) || 0) * (Number(form.price) || 0);
 
@@ -81,7 +90,27 @@ export default function KasirInputNota() {
         <div className="lg:col-span-2 bg-card border rounded-xl shadow-card p-6 space-y-4">
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-1.5"><Label>Tanggal Nota</Label><Input type="date" value={form.invoice_date} onChange={(e) => setForm({ ...form, invoice_date: e.target.value })} required /></div>
-            <div className="space-y-1.5"><Label>Supplier</Label><Input value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} required /></div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label>Supplier</Label>
+                <button type="button" className="text-xs text-primary font-medium"
+                  onClick={() => { setSupplierMode(supplierMode === "select" ? "new" : "select"); setForm({ ...form, supplier: "" }); }}>
+                  {supplierMode === "select" ? "+ Supplier baru" : "← Pilih dari daftar"}
+                </button>
+              </div>
+              {supplierMode === "select" ? (
+                suppliers.length === 0 ? (
+                  <div className="text-xs text-muted-foreground border rounded-md p-2">Belum ada supplier. Klik "+ Supplier baru" untuk mengetik manual.</div>
+                ) : (
+                  <Select value={form.supplier} onValueChange={(v) => setForm({ ...form, supplier: v })}>
+                    <SelectTrigger><SelectValue placeholder="Pilih supplier…" /></SelectTrigger>
+                    <SelectContent>{suppliers.map((s) => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                )
+              ) : (
+                <Input value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} placeholder="Nama supplier baru" required />
+              )}
+            </div>
           </div>
           <div className="space-y-1.5"><Label>Nama Barang</Label><Input value={form.item_name} onChange={(e) => setForm({ ...form, item_name: e.target.value })} required /></div>
           <div className="grid sm:grid-cols-2 gap-4">
