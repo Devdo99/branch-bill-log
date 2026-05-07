@@ -26,6 +26,9 @@ export default function ManagerInvoices() {
   const [invs, setInvs] = useState<Inv[]>([]);
   const [loading, setLoading] = useState(true);
   const [supplier, setSupplier] = useState("");
+  const [itemQuery, setItemQuery] = useState("");
+  const [supplierFilter, setSupplierFilter] = useState<string>("all");
+  const [supplierOptions, setSupplierOptions] = useState<string[]>([]);
   const [status, setStatus] = useState<"all" | "BELUM" | "SUDAH">("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -43,13 +46,21 @@ export default function ManagerInvoices() {
   };
   useEffect(() => { load(); }, [activeBranch?.id]);
 
+  useEffect(() => {
+    if (!activeBranch) return;
+    supabase.from("suppliers").select("name").eq("branch_id", activeBranch.id).order("name")
+      .then(({ data }) => setSupplierOptions((data ?? []).map((s: any) => s.name)));
+  }, [activeBranch?.id]);
+
   const filtered = useMemo(() => invs.filter((i) => {
     if (supplier && !i.supplier.toLowerCase().includes(supplier.toLowerCase())) return false;
+    if (supplierFilter !== "all" && i.supplier !== supplierFilter) return false;
+    if (itemQuery && !i.item_name.toLowerCase().includes(itemQuery.toLowerCase())) return false;
     if (status !== "all" && i.status !== status) return false;
     if (from && i.invoice_date < from) return false;
     if (to && i.invoice_date > to) return false;
     return true;
-  }), [invs, supplier, status, from, to]);
+  }), [invs, supplier, supplierFilter, itemQuery, status, from, to]);
 
   const totalFiltered = filtered.reduce((s, i) => s + Number(i.total), 0);
 
@@ -119,8 +130,18 @@ export default function ManagerInvoices() {
 
   return (
     <AppShell title={`Nota — ${activeBranch?.name}`}>
-      <div className="bg-card border rounded-xl shadow-card p-4 grid md:grid-cols-5 gap-3">
-        <div className="space-y-1.5"><Label>Supplier</Label><div className="relative"><Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-8" placeholder="Cari…" value={supplier} onChange={(e) => setSupplier(e.target.value)} /></div></div>
+      <div className="bg-card border rounded-xl shadow-card p-4 grid md:grid-cols-6 gap-3">
+        <div className="space-y-1.5"><Label>Supplier (daftar)</Label>
+          <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua supplier</SelectItem>
+              {supplierOptions.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5"><Label>Cari supplier</Label><div className="relative"><Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-8" placeholder="ketik…" value={supplier} onChange={(e) => setSupplier(e.target.value)} /></div></div>
+        <div className="space-y-1.5"><Label>Nama Item</Label><div className="relative"><Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-8" placeholder="cth: beras" value={itemQuery} onChange={(e) => setItemQuery(e.target.value)} /></div></div>
         <div className="space-y-1.5"><Label>Status</Label>
           <Select value={status} onValueChange={(v: any) => setStatus(v)}>
             <SelectTrigger><SelectValue /></SelectTrigger>
