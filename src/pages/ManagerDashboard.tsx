@@ -102,7 +102,7 @@ export default function ManagerDashboard() {
             <LineChart data={trendData}>
               <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
               <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+              <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v) => formatRupiahCompact(v)} />
               <Tooltip formatter={(v: number) => formatRupiah(v)} />
               <Line type="monotone" dataKey="total" stroke="hsl(152 72% 32%)" strokeWidth={2.5} dot={{ r: 3 }} />
             </LineChart>
@@ -129,7 +129,7 @@ export default function ManagerDashboard() {
           {itemData.length === 0 ? <EmptyChart /> : (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={itemData} layout="vertical">
-                <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => formatRupiahCompact(v)} />
                 <YAxis type="category" dataKey="item" width={90} tick={{ fontSize: 11 }} />
                 <Tooltip formatter={(v: number) => formatRupiah(v)} />
                 <Bar dataKey="total" fill="hsl(38 92% 55%)" radius={[0,6,6,0]} />
@@ -144,7 +144,8 @@ export default function ManagerDashboard() {
           {branchData.every((b) => b.total === 0) ? <EmptyChart /> : (
             <ResponsiveContainer width="100%" height={260}>
               <PieChart>
-                <Pie data={branchData.filter((b) => b.total > 0)} dataKey="total" nameKey="name" outerRadius={90} label>
+                <Pie data={branchData.filter((b) => b.total > 0)} dataKey="total" nameKey="name" outerRadius={90}
+                  label={({ name, value }) => `${name}: ${formatRupiah(Number(value))}`}>
                   {branchData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <Tooltip formatter={(v: number) => formatRupiah(v)} />
