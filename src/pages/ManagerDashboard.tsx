@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
 import { useBranch } from "@/contexts/BranchContext";
 import { supabase } from "@/integrations/supabase/client";
-import { formatRupiah } from "@/lib/format";
+import { formatRupiah, formatRupiahCompact } from "@/lib/format";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, CartesianGrid } from "recharts";
 import { TrendingUp, AlertCircle, CheckCircle2, Receipt, Package, Truck } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -117,7 +117,7 @@ export default function ManagerDashboard() {
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={supplierData}>
                 <XAxis dataKey="supplier" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v) => formatRupiahCompact(v)} />
                 <Tooltip formatter={(v: number) => formatRupiah(v)} />
                 <Bar dataKey="total" fill="hsl(152 72% 32%)" radius={[6,6,0,0]} />
               </BarChart>
