@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranch } from "@/contexts/BranchContext";
 import { Button } from "@/components/ui/button";
-import { LogOut, Receipt, LayoutDashboard, FileText, Users, Building2, Plus } from "lucide-react";
+import { LogOut, Receipt, LayoutDashboard, FileText, Users, Building2, Plus, Truck } from "lucide-react";
 
 interface Props { children: ReactNode; title?: string }
 
@@ -16,6 +16,7 @@ export default function AppShell({ children, title }: Props) {
   const managerNav = [
     { to: "/manager", label: "Dashboard", icon: LayoutDashboard },
     { to: "/manager/invoices", label: "Nota", icon: FileText },
+    { to: "/manager/suppliers", label: "Supplier", icon: Truck },
     { to: "/manager/cashiers", label: "Kasir", icon: Users },
     { to: "/manager/branches", label: "Cabang", icon: Building2 },
   ];
