@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Search, FileDown, Image as ImgIcon, MessageCircle, Eye } from "lucide-react";
+import { Search, FileDown, Image as ImgIcon, MessageCircle, Eye, ZoomIn, ZoomOut, RotateCw } from "lucide-react";
 import jsPDF from "jspdf";
 
 interface Inv {
@@ -34,6 +34,8 @@ export default function ManagerInvoices() {
   const [to, setTo] = useState("");
   const [detail, setDetail] = useState<Inv | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [rotate, setRotate] = useState(0);
 
   const load = async () => {
     if (!activeBranch) return;
@@ -75,7 +77,7 @@ export default function ManagerInvoices() {
   };
 
   const openDetail = async (inv: Inv) => {
-    setDetail(inv); setPhotoUrl(null);
+    setDetail(inv); setPhotoUrl(null); setZoom(1); setRotate(0);
     if (inv.photo_path) {
       const { data } = await supabase.storage.from("nota-photos").createSignedUrl(inv.photo_path, 3600);
       setPhotoUrl(data?.signedUrl ?? null);
@@ -191,7 +193,7 @@ export default function ManagerInvoices() {
       </div>
 
       <Dialog open={!!detail} onOpenChange={(v) => !v && setDetail(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Detail Nota</DialogTitle></DialogHeader>
           {detail && (
             <div className="space-y-3 text-sm">
@@ -204,8 +206,24 @@ export default function ManagerInvoices() {
               {detail.paid_at && <Row k="Dibayar pada" v={new Date(detail.paid_at).toLocaleString("id-ID")} />}
               {photoUrl ? (
                 <div>
-                  <div className="text-muted-foreground mb-2">Foto Nota</div>
-                  <img src={photoUrl} alt="Foto nota" className="w-full rounded-lg border" />
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-muted-foreground">Foto Nota</div>
+                    <div className="flex items-center gap-1">
+                      <Button size="icon" variant="outline" onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.25).toFixed(2)))}><ZoomOut className="h-4 w-4" /></Button>
+                      <span className="text-xs w-10 text-center">{Math.round(zoom * 100)}%</span>
+                      <Button size="icon" variant="outline" onClick={() => setZoom((z) => Math.min(4, +(z + 0.25).toFixed(2)))}><ZoomIn className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="outline" onClick={() => setRotate((r) => (r + 90) % 360)}><RotateCw className="h-4 w-4" /></Button>
+                    </div>
+                  </div>
+                  <div className="w-full h-[60vh] overflow-auto rounded-lg border bg-muted/30 grid place-items-start touch-pan-x touch-pan-y">
+                    <img
+                      src={photoUrl}
+                      alt="Foto nota"
+                      style={{ transform: `scale(${zoom}) rotate(${rotate}deg)`, transformOrigin: "top left" }}
+                      className="max-w-none transition-transform select-none"
+                      draggable={false}
+                    />
+                  </div>
                   <div className="flex gap-2 mt-2">
                     <a href={photoUrl} target="_blank" rel="noreferrer"><Button size="sm" variant="outline">Buka</Button></a>
                     <Button size="sm" className="bg-success text-success-foreground" onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`Nota ${detail.supplier} - ${formatRupiah(Number(detail.total))}\n${photoUrl}`)}`, "_blank")}>
