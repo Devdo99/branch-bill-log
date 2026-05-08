@@ -11,7 +11,11 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Search, FileDown, Image as ImgIcon, MessageCircle, Eye, ZoomIn, ZoomOut, RotateCw } from "lucide-react";
+import { Search, FileDown, Image as ImgIcon, MessageCircle, Eye, ZoomIn, ZoomOut, RotateCw, Pencil, Trash2, CalendarDays, Filter, Sparkles, Receipt, Wallet, CheckCircle2, Clock } from "lucide-react";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import jsPDF from "jspdf";
 
 interface Inv {
@@ -36,6 +40,9 @@ export default function ManagerInvoices() {
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [rotate, setRotate] = useState(0);
+  const [editing, setEditing] = useState<Inv | null>(null);
+  const [editDate, setEditDate] = useState("");
+  const [deleting, setDeleting] = useState<Inv | null>(null);
 
   const load = async () => {
     if (!activeBranch) return;
@@ -65,6 +72,8 @@ export default function ManagerInvoices() {
   }), [invs, supplier, supplierFilter, itemQuery, status, from, to]);
 
   const totalFiltered = filtered.reduce((s, i) => s + Number(i.total), 0);
+  const paidTotal = filtered.filter((i) => i.status === "SUDAH").reduce((s, i) => s + Number(i.total), 0);
+  const unpaidTotal = filtered.filter((i) => i.status === "BELUM").reduce((s, i) => s + Number(i.total), 0);
 
   const togglePaid = async (inv: Inv, paid: boolean) => {
     const update = paid
@@ -73,6 +82,27 @@ export default function ManagerInvoices() {
     const { error } = await supabase.from("invoices").update(update).eq("id", inv.id);
     if (error) return toast.error(error.message);
     toast.success(paid ? "Ditandai TERBAYAR" : "Ditandai BELUM");
+    load();
+  };
+
+  const saveEditDate = async () => {
+    if (!editing || !editDate) return;
+    const { error } = await supabase.from("invoices").update({ invoice_date: editDate }).eq("id", editing.id);
+    if (error) return toast.error(error.message);
+    toast.success("Tanggal diperbarui");
+    setEditing(null);
+    load();
+  };
+
+  const confirmDelete = async () => {
+    if (!deleting) return;
+    const { error } = await supabase.from("invoices").delete().eq("id", deleting.id);
+    if (error) return toast.error(error.message);
+    if (deleting.photo_path) {
+      await supabase.storage.from("nota-photos").remove([deleting.photo_path]).catch(() => {});
+    }
+    toast.success("Nota dihapus");
+    setDeleting(null);
     load();
   };
 
@@ -132,7 +162,17 @@ export default function ManagerInvoices() {
 
   return (
     <AppShell title={`Nota — ${activeBranch?.name}`}>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+        <StatCard icon={<Receipt className="h-5 w-5" />} label="Jumlah Nota" value={String(filtered.length)} tone="primary" />
+        <StatCard icon={<Wallet className="h-5 w-5" />} label="Total" value={formatRupiah(totalFiltered)} tone="primary" />
+        <StatCard icon={<CheckCircle2 className="h-5 w-5" />} label="Sudah Dibayar" value={formatRupiah(paidTotal)} tone="success" />
+        <StatCard icon={<Clock className="h-5 w-5" />} label="Belum Dibayar" value={formatRupiah(unpaidTotal)} tone="warning" />
+      </div>
+
       <div className="bg-card border rounded-xl shadow-card p-4 grid md:grid-cols-6 gap-3">
+        <div className="md:col-span-6 flex items-center gap-2 text-sm font-semibold text-muted-foreground -mb-1">
+          <Filter className="h-4 w-4" /> Filter
+        </div>
         <div className="space-y-1.5"><Label>Supplier (daftar)</Label>
           <Select value={supplierFilter} onValueChange={setSupplierFilter}>
             <SelectTrigger><SelectValue /></SelectTrigger>
@@ -156,9 +196,10 @@ export default function ManagerInvoices() {
       </div>
 
       <div className="flex flex-wrap gap-2 mt-4">
-        <Button variant="outline" onClick={exportPDF}><FileDown className="h-4 w-4 mr-1" /> Export PDF</Button>
-        <Button variant="outline" onClick={exportJPG}><ImgIcon className="h-4 w-4 mr-1" /> Export JPG</Button>
-        <Button className="bg-success text-success-foreground hover:bg-success/90" onClick={sendWhatsApp}><MessageCircle className="h-4 w-4 mr-1" /> Kirim WhatsApp</Button>
+        <Button variant="outline" onClick={exportPDF}><FileDown className="h-4 w-4 mr-1.5" /> Export PDF</Button>
+        <Button variant="outline" onClick={exportJPG}><ImgIcon className="h-4 w-4 mr-1.5" /> Export JPG</Button>
+        <Button className="bg-success text-success-foreground hover:bg-success/90" onClick={sendWhatsApp}><MessageCircle className="h-4 w-4 mr-1.5" /> Kirim WhatsApp</Button>
+        <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground"><Sparkles className="h-3.5 w-3.5" /> Klik ikon di tabel untuk edit / hapus</div>
       </div>
 
       <div id="invoice-table-export" className="bg-card border rounded-xl shadow-card mt-4 overflow-hidden">
@@ -175,7 +216,7 @@ export default function ManagerInvoices() {
               {loading ? <tr><td colSpan={9} className="p-6 text-center text-muted-foreground">Memuat…</td></tr>
                : filtered.length === 0 ? <tr><td colSpan={9} className="p-6 text-center text-muted-foreground">Tidak ada nota</td></tr>
                : filtered.map((i) => (
-                <tr key={i.id} className="border-t">
+                <tr key={i.id} className="border-t hover:bg-muted/40 transition-colors">
                   <td className="p-3"><Checkbox checked={i.status === "SUDAH"} onCheckedChange={(v) => togglePaid(i, !!v)} /></td>
                   <td className="p-3 whitespace-nowrap">{formatDate(i.invoice_date)}</td>
                   <td className="p-3">{i.supplier}</td>
@@ -184,7 +225,13 @@ export default function ManagerInvoices() {
                   <td className="p-3 text-right">{formatRupiah(Number(i.price))}</td>
                   <td className="p-3 text-right font-semibold">{formatRupiah(Number(i.total))}</td>
                   <td className="p-3"><span className={`text-xs px-2 py-0.5 rounded-full ${i.status === "SUDAH" ? "bg-success text-success-foreground" : "bg-warning text-warning-foreground"}`}>{i.status}</span></td>
-                  <td className="p-3"><Button size="icon" variant="ghost" onClick={() => openDetail(i)}><Eye className="h-4 w-4" /></Button></td>
+                  <td className="p-3">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button size="icon" variant="ghost" title="Detail" onClick={() => openDetail(i)}><Eye className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="ghost" title="Edit tanggal" onClick={() => { setEditing(i); setEditDate(i.invoice_date); }}><Pencil className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="ghost" title="Hapus" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleting(i)}><Trash2 className="h-4 w-4" /></Button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -236,10 +283,57 @@ export default function ManagerInvoices() {
           )}
         </DialogContent>
       </Dialog>
+
+      <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><CalendarDays className="h-5 w-5" /> Edit Tanggal Nota</DialogTitle></DialogHeader>
+          {editing && (
+            <div className="space-y-3">
+              <div className="text-sm text-muted-foreground">{editing.supplier} • {editing.item_name}</div>
+              <div className="space-y-1.5">
+                <Label>Tanggal nota</Label>
+                <Input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+              </div>
+              <div className="flex justify-end gap-2 pt-2">
+                <Button variant="outline" onClick={() => setEditing(null)}>Batal</Button>
+                <Button onClick={saveEditDate}>Simpan</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={!!deleting} onOpenChange={(v) => !v && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2"><Trash2 className="h-5 w-5 text-destructive" /> Hapus nota?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleting && <>Nota <b>{deleting.supplier}</b> — {deleting.item_name} ({formatRupiah(Number(deleting.total))}) akan dihapus permanen{deleting.photo_path ? " beserta foto notanya" : ""}.</>}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={confirmDelete}>Hapus</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppShell>
   );
 }
 
 function Row({ k, v }: { k: string; v: React.ReactNode }) {
   return <div className="flex justify-between gap-4"><span className="text-muted-foreground">{k}</span><span className="text-right">{v}</span></div>;
+}
+
+function StatCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: "primary" | "success" | "warning" }) {
+  const toneCls = tone === "success" ? "bg-success/10 text-success" : tone === "warning" ? "bg-warning/15 text-warning-foreground" : "bg-primary/10 text-primary";
+  return (
+    <div className="bg-card border rounded-xl shadow-card p-3 flex items-center gap-3">
+      <div className={`h-10 w-10 grid place-items-center rounded-lg ${toneCls}`}>{icon}</div>
+      <div className="min-w-0">
+        <div className="text-xs text-muted-foreground truncate">{label}</div>
+        <div className="font-display font-bold text-base truncate">{value}</div>
+      </div>
+    </div>
+  );
 }
