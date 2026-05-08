@@ -4,10 +4,11 @@ import { useBranch } from "@/contexts/BranchContext";
 import { supabase } from "@/integrations/supabase/client";
 import { formatRupiah, formatRupiahCompact } from "@/lib/format";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, CartesianGrid } from "recharts";
-import { TrendingUp, AlertCircle, CheckCircle2, Receipt, Package, Truck, Building2, Crown, Calendar, Layers, Wallet, BarChart3 } from "lucide-react";
+import { TrendingUp, AlertCircle, CheckCircle2, Receipt, Package, Truck, Building2, Crown, Calendar, Layers, Wallet, BarChart3, LineChart as LineIcon } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Inv { id: string; supplier: string; item_name: string; qty: number; price: number; total: number; status: "BELUM" | "SUDAH"; invoice_date: string; branch_id: string }
 
@@ -18,6 +19,24 @@ export default function ManagerDashboard() {
   const [loading, setLoading] = useState(true);
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
+  const [periodMode, setPeriodMode] = useState<"custom" | "bulan" | "kuartal" | "semester" | "tahun">("custom");
+  const now = new Date();
+  const [year, setYear] = useState<number>(now.getFullYear());
+  const [month, setMonth] = useState<number>(now.getMonth() + 1); // 1-12
+  const [quarter, setQuarter] = useState<number>(Math.floor(now.getMonth() / 3) + 1);
+  const [semester, setSemester] = useState<number>(now.getMonth() < 6 ? 1 : 2);
+  const [trendItem, setTrendItem] = useState<string>("");
+
+  const fmtDate = (d: Date) => d.toISOString().slice(0, 10);
+  useEffect(() => {
+    if (periodMode === "custom") return;
+    let f: Date, t: Date;
+    if (periodMode === "tahun") { f = new Date(year, 0, 1); t = new Date(year, 11, 31); }
+    else if (periodMode === "semester") { f = new Date(year, semester === 1 ? 0 : 6, 1); t = new Date(year, semester === 1 ? 5 : 11, semester === 1 ? 30 : 31); }
+    else if (periodMode === "kuartal") { const sm = (quarter - 1) * 3; f = new Date(year, sm, 1); t = new Date(year, sm + 3, 0); }
+    else { f = new Date(year, month - 1, 1); t = new Date(year, month, 0); }
+    setFrom(fmtDate(f)); setTo(fmtDate(t));
+  }, [periodMode, year, month, quarter, semester]);
 
   useEffect(() => {
     (async () => {
@@ -65,6 +84,29 @@ export default function ManagerDashboard() {
     branchInv.forEach((i) => map.set(i.invoice_date, (map.get(i.invoice_date) ?? 0) + Number(i.total)));
     return Array.from(map, ([date, total]) => ({ date: date.slice(5), total })).sort((a, b) => a.date.localeCompare(b.date)).slice(-14);
   }, [branchInv]);
+
+  const itemNames = useMemo(() => Array.from(new Set(branchInv.map((i) => i.item_name.trim()))).sort(), [branchInv]);
+  useEffect(() => { if (!trendItem && itemNames.length) setTrendItem(itemNames[0]); }, [itemNames, trendItem]);
+
+  const priceTrendData = useMemo(() => {
+    if (!trendItem) return [] as { date: string; price: number }[];
+    const map = new Map<string, { sum: number; n: number }>();
+    branchInv.filter((i) => i.item_name.trim() === trendItem).forEach((i) => {
+      const cur = map.get(i.invoice_date) ?? { sum: 0, n: 0 };
+      map.set(i.invoice_date, { sum: cur.sum + Number(i.price), n: cur.n + 1 });
+    });
+    return Array.from(map, ([date, v]) => ({ date: date.slice(5), price: Math.round(v.sum / v.n) }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [branchInv, trendItem]);
+
+  const priceStats = useMemo(() => {
+    if (priceTrendData.length === 0) return null;
+    const prices = priceTrendData.map((p) => p.price);
+    const min = Math.min(...prices), max = Math.max(...prices);
+    const first = prices[0], last = prices[prices.length - 1];
+    const change = first > 0 ? ((last - first) / first) * 100 : 0;
+    return { min, max, first, last, change };
+  }, [priceTrendData]);
 
   const branchData = useMemo(() => {
     const map = new Map<string, number>();
@@ -127,10 +169,89 @@ export default function ManagerDashboard() {
 
   return (
     <AppShell title={`Dashboard — ${activeBranch?.name}`}>
-      <div className="bg-card border rounded-xl shadow-card p-4 grid sm:grid-cols-3 gap-3 mb-4">
-        <div className="space-y-1.5"><Label>Dari tanggal</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-        <div className="space-y-1.5"><Label>Sampai tanggal</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
-        <div className="flex items-end"><button onClick={() => { setFrom(""); setTo(""); }} className="text-sm text-primary font-medium">Reset filter</button></div>
+      <div className="bg-card border rounded-xl shadow-card p-4 mb-4 space-y-3">
+        <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+          <Calendar className="h-4 w-4" /> Filter Periode
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-3">
+          <div className="space-y-1.5">
+            <Label>Mode</Label>
+            <Select value={periodMode} onValueChange={(v: any) => setPeriodMode(v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="custom">Custom</SelectItem>
+                <SelectItem value="bulan">Bulan</SelectItem>
+                <SelectItem value="kuartal">Kuartal</SelectItem>
+                <SelectItem value="semester">Semester</SelectItem>
+                <SelectItem value="tahun">Tahun</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          {periodMode !== "custom" && (
+            <div className="space-y-1.5">
+              <Label>Tahun</Label>
+              <Select value={String(year)} onValueChange={(v) => setYear(+v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {Array.from({ length: 6 }, (_, i) => now.getFullYear() - i).map((y) => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {periodMode === "bulan" && (
+            <div className="space-y-1.5">
+              <Label>Bulan</Label>
+              <Select value={String(month)} onValueChange={(v) => setMonth(+v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"].map((n, i) => (
+                    <SelectItem key={i} value={String(i + 1)}>{n}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {periodMode === "kuartal" && (
+            <div className="space-y-1.5">
+              <Label>Kuartal</Label>
+              <Select value={String(quarter)} onValueChange={(v) => setQuarter(+v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">Q1 (Jan–Mar)</SelectItem>
+                  <SelectItem value="2">Q2 (Apr–Jun)</SelectItem>
+                  <SelectItem value="3">Q3 (Jul–Sep)</SelectItem>
+                  <SelectItem value="4">Q4 (Okt–Des)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {periodMode === "semester" && (
+            <div className="space-y-1.5">
+              <Label>Semester</Label>
+              <Select value={String(semester)} onValueChange={(v) => setSemester(+v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">Sem 1 (Jan–Jun)</SelectItem>
+                  <SelectItem value="2">Sem 2 (Jul–Des)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          {periodMode === "custom" && (
+            <>
+              <div className="space-y-1.5"><Label>Dari</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Sampai</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+            </>
+          )}
+          <div className="flex items-end">
+            <button onClick={() => { setPeriodMode("custom"); setFrom(""); setTo(""); }} className="text-sm text-primary font-medium">Reset</button>
+          </div>
+        </div>
+        {(from || to) && (
+          <div className="text-xs text-muted-foreground">Periode aktif: <b>{from || "?"}</b> s/d <b>{to || "?"}</b></div>
+        )}
       </div>
 
       <div className="grid sm:grid-cols-3 gap-4">
@@ -154,6 +275,49 @@ export default function ManagerDashboard() {
               <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v) => formatRupiahCompact(v)} />
               <Tooltip formatter={(v: number) => formatRupiah(v)} />
               <Line type="monotone" dataKey="total" stroke="hsl(152 72% 32%)" strokeWidth={2.5} dot={{ r: 3 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* === TREN HARGA BAHAN BAKU === */}
+      <div className="bg-card rounded-xl border shadow-card p-5 mt-6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2">
+            <LineIcon className="h-5 w-5 text-primary" />
+            <h3 className="font-display font-bold">Tren Harga Bahan Baku</h3>
+          </div>
+          <div className="min-w-[220px]">
+            <Select value={trendItem} onValueChange={setTrendItem}>
+              <SelectTrigger><SelectValue placeholder="Pilih bahan baku" /></SelectTrigger>
+              <SelectContent>
+                {itemNames.length === 0 ? <SelectItem value="-" disabled>Belum ada item</SelectItem>
+                  : itemNames.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        {priceStats && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4 text-sm">
+            <div className="bg-accent/40 rounded-lg p-2"><div className="text-xs text-muted-foreground">Harga awal</div><div className="font-semibold">{formatRupiah(priceStats.first)}</div></div>
+            <div className="bg-accent/40 rounded-lg p-2"><div className="text-xs text-muted-foreground">Harga terakhir</div><div className="font-semibold">{formatRupiah(priceStats.last)}</div></div>
+            <div className="bg-accent/40 rounded-lg p-2"><div className="text-xs text-muted-foreground">Min – Max</div><div className="font-semibold text-xs">{formatRupiahCompact(priceStats.min)} – {formatRupiahCompact(priceStats.max)}</div></div>
+            <div className={`rounded-lg p-2 ${priceStats.change >= 0 ? "bg-warning/20" : "bg-success/20"}`}>
+              <div className="text-xs text-muted-foreground">Perubahan</div>
+              <div className={`font-semibold ${priceStats.change >= 0 ? "text-warning-foreground" : "text-success"}`}>
+                {priceStats.change >= 0 ? "▲" : "▼"} {Math.abs(priceStats.change).toFixed(1)}%
+              </div>
+            </div>
+          </div>
+        )}
+        {priceTrendData.length === 0 ? <EmptyChart /> : (
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={priceTrendData}>
+              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+              <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v) => formatRupiahCompact(v)} />
+              <Tooltip formatter={(v: number) => formatRupiah(v)} />
+              <Line type="monotone" dataKey="price" name="Harga rata-rata" stroke="hsl(38 92% 55%)" strokeWidth={2.5} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
         )}
