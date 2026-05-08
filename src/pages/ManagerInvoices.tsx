@@ -353,6 +353,44 @@ export default function ManagerInvoices() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={waOpen} onOpenChange={setWaOpen}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><MessageCircle className="h-5 w-5 text-success" /> Kirim Laporan via WhatsApp</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Nomor tujuan (opsional)</Label>
+              <Input placeholder="cth: 628123456789" value={waPhone} onChange={(e) => setWaPhone(e.target.value)} />
+              <div className="text-xs text-muted-foreground">Kosongkan untuk memilih kontak saat dialihkan ke WhatsApp.</div>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-1.5"><Settings2 className="h-3.5 w-3.5" /> Isi pesan (bisa diedit)</Label>
+                <Button size="sm" variant="ghost" onClick={() => { setWaTemplate(DEFAULT_WA_TEMPLATE); setWaText(buildText(filtered)); }}>
+                  <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reset template
+                </Button>
+              </div>
+              <Textarea rows={12} value={waText} onChange={(e) => setWaText(e.target.value)} className="font-mono text-xs" />
+              <div className="text-xs text-muted-foreground">
+                Variabel template: <code>{"{cabang} {periode} {tanggal} {jumlah} {total} {sudah} {belum} {rincian}"}</code>
+              </div>
+            </div>
+            <details className="text-xs">
+              <summary className="cursor-pointer text-primary font-medium">Edit template default (tersimpan otomatis)</summary>
+              <Textarea rows={8} value={waTemplate} onChange={(e) => setWaTemplate(e.target.value)} className="font-mono mt-2" />
+              <Button size="sm" variant="outline" className="mt-2" onClick={() => setWaText(buildText(filtered))}>Terapkan ke pesan</Button>
+            </details>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setWaOpen(false)}>Batal</Button>
+              <Button className="bg-success text-success-foreground hover:bg-success/90" onClick={sendWhatsApp}>
+                <MessageCircle className="h-4 w-4 mr-1.5" /> Kirim
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }
