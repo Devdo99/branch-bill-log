@@ -19,6 +19,18 @@ import {
 } from "@/components/ui/alert-dialog";
 import jsPDF from "jspdf";
 
+const DEFAULT_WA_TEMPLATE = `*Laporan Nota — {cabang}*
+Periode: {periode}
+Tanggal kirim: {tanggal}
+
+Jumlah nota: {jumlah}
+Total: *{total}*
+Sudah dibayar: {sudah}
+Belum dibayar: {belum}
+
+Rincian:
+{rincian}`;
+
 interface Inv {
   id: string; invoice_date: string; supplier: string; item_name: string;
   qty: number; price: number; total: number; status: "BELUM" | "SUDAH";
@@ -127,14 +139,14 @@ export default function ManagerInvoices() {
     const paid = rows.filter((r) => r.status === "SUDAH").reduce((s, i) => s + Number(i.total), 0);
     const unpaid = total - paid;
     return waTemplate
-      .replaceAll("{cabang}", activeBranch?.name ?? "-")
-      .replaceAll("{periode}", from || to ? `${from || "-"} s/d ${to || "-"}` : "Semua periode")
-      .replaceAll("{jumlah}", String(rows.length))
-      .replaceAll("{total}", formatRupiah(total))
-      .replaceAll("{sudah}", formatRupiah(paid))
-      .replaceAll("{belum}", formatRupiah(unpaid))
-      .replaceAll("{tanggal}", new Date().toLocaleDateString("id-ID"))
-      .replaceAll("{rincian}", lines || "(tidak ada nota)");
+      .split("{cabang}").join(activeBranch?.name ?? "-")
+      .split("{periode}").join(from || to ? `${from || "-"} s/d ${to || "-"}` : "Semua periode")
+      .split("{jumlah}").join(String(rows.length))
+      .split("{total}").join(formatRupiah(total))
+      .split("{sudah}").join(formatRupiah(paid))
+      .split("{belum}").join(formatRupiah(unpaid))
+      .split("{tanggal}").join(new Date().toLocaleDateString("id-ID"))
+      .split("{rincian}").join(lines || "(tidak ada nota)");
   };
 
   const openWa = () => {
