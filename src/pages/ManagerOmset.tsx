@@ -38,7 +38,7 @@ export default function ManagerOmset() {
       .eq("branch_id", activeBranch.id)
       .order("revenue_date", { ascending: false });
     if (error) toast.error(error.message);
-    setList((data ?? []) as Revenue[]);
+    setList(((data ?? []) as unknown) as Revenue[]);
     setLoading(false);
   };
   useEffect(() => { load(); }, [activeBranch?.id]);
