@@ -757,3 +757,21 @@ function MiniStat({ icon, label, value }: { icon: React.ReactNode; label: string
     </div>
   );
 }
+
+function DarkStat({ icon, label, value, delta, invertDelta, accent }: { icon: React.ReactNode; label: string; value: string; delta?: number; invertDelta?: boolean; accent?: "good" | "bad" }) {
+  const showDelta = typeof delta === "number" && isFinite(delta) && delta !== 0;
+  const positive = showDelta && (invertDelta ? delta! < 0 : delta! > 0);
+  const valueCls = accent === "good" ? "text-success-foreground" : accent === "bad" ? "text-destructive-foreground" : "";
+  return (
+    <div className="bg-white/10 backdrop-blur rounded-lg p-3">
+      <div className="flex items-center gap-1.5 text-[11px] opacity-90">{icon}{label}</div>
+      <div className={`font-display font-bold text-base mt-1 ${valueCls}`}>{value}</div>
+      {showDelta && (
+        <div className={`text-[11px] mt-0.5 flex items-center gap-0.5 ${positive ? "text-success" : "text-warning"}`}>
+          {delta! > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+          {Math.abs(delta!).toFixed(1)}% vs sebelumnya
+        </div>
+      )}
+    </div>
+  );
+}
