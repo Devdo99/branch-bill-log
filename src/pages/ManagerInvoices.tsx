@@ -29,7 +29,10 @@ Sudah dibayar: {sudah}
 Belum dibayar: {belum}
 
 Rincian:
-{rincian}`;
+{rincian}
+
+*Rekening Supplier (Belum Dibayar):*
+{rekening}`;
 
 interface Inv {
   id: string; invoice_date: string; supplier: string; item_name: string;
@@ -46,6 +49,7 @@ export default function ManagerInvoices() {
   const [itemQuery, setItemQuery] = useState("");
   const [supplierFilter, setSupplierFilter] = useState<string>("all");
   const [supplierOptions, setSupplierOptions] = useState<string[]>([]);
+  const [supplierBank, setSupplierBank] = useState<Record<string, { bank_name: string | null; bank_account: string | null; account_holder: string | null }>>({});
   const [status, setStatus] = useState<"all" | "BELUM" | "SUDAH">("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -74,8 +78,15 @@ export default function ManagerInvoices() {
 
   useEffect(() => {
     if (!activeBranch) return;
-    supabase.from("suppliers").select("name").eq("branch_id", activeBranch.id).order("name")
-      .then(({ data }) => setSupplierOptions((data ?? []).map((s: any) => s.name)));
+    supabase.from("suppliers").select("name, bank_name, bank_account, account_holder")
+      .eq("branch_id", activeBranch.id).order("name")
+      .then(({ data }) => {
+        const list = (data ?? []) as any[];
+        setSupplierOptions(list.map((s) => s.name));
+        const map: Record<string, any> = {};
+        list.forEach((s) => { map[s.name] = { bank_name: s.bank_name, bank_account: s.bank_account, account_holder: s.account_holder }; });
+        setSupplierBank(map);
+      });
   }, [activeBranch?.id]);
 
   const filtered = useMemo(() => invs.filter((i) => {
@@ -138,6 +149,14 @@ export default function ManagerInvoices() {
     const total = rows.reduce((s, i) => s + Number(i.total), 0);
     const paid = rows.filter((r) => r.status === "SUDAH").reduce((s, i) => s + Number(i.total), 0);
     const unpaid = total - paid;
+    const unpaidSuppliers = Array.from(new Set(rows.filter((r) => r.status === "BELUM").map((r) => r.supplier)));
+    const rekening = unpaidSuppliers.length === 0
+      ? "(semua sudah dibayar)"
+      : unpaidSuppliers.map((name) => {
+          const b = supplierBank[name];
+          if (!b || (!b.bank_name && !b.bank_account)) return `• ${name}: (belum ada rekening)`;
+          return `• ${name}\n   ${b.bank_name ?? "-"} ${b.bank_account ?? "-"}${b.account_holder ? ` a.n. ${b.account_holder}` : ""}`;
+        }).join("\n");
     return waTemplate
       .split("{cabang}").join(activeBranch?.name ?? "-")
       .split("{periode}").join(from || to ? `${from || "-"} s/d ${to || "-"}` : "Semua periode")
@@ -146,7 +165,8 @@ export default function ManagerInvoices() {
       .split("{sudah}").join(formatRupiah(paid))
       .split("{belum}").join(formatRupiah(unpaid))
       .split("{tanggal}").join(new Date().toLocaleDateString("id-ID"))
-      .split("{rincian}").join(lines || "(tidak ada nota)");
+      .split("{rincian}").join(lines || "(tidak ada nota)")
+      .split("{rekening}").join(rekening);
   };
 
   const openWa = () => {
@@ -374,7 +394,7 @@ export default function ManagerInvoices() {
               </div>
               <Textarea rows={12} value={waText} onChange={(e) => setWaText(e.target.value)} className="font-mono text-xs" />
               <div className="text-xs text-muted-foreground">
-                Variabel template: <code>{"{cabang} {periode} {tanggal} {jumlah} {total} {sudah} {belum} {rincian}"}</code>
+                Variabel template: <code>{"{cabang} {periode} {tanggal} {jumlah} {total} {sudah} {belum} {rincian} {rekening}"}</code>
               </div>
             </div>
             <details className="text-xs">
