@@ -3,18 +3,20 @@ import AppShell from "@/components/AppShell";
 import { useBranch } from "@/contexts/BranchContext";
 import { supabase } from "@/integrations/supabase/client";
 import { formatRupiah, formatRupiahCompact } from "@/lib/format";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, CartesianGrid } from "recharts";
-import { TrendingUp, AlertCircle, CheckCircle2, Receipt, Package, Truck, Building2, Crown, Calendar, Layers, Wallet, BarChart3, LineChart as LineIcon } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, CartesianGrid, ComposedChart, Area } from "recharts";
+import { TrendingUp, AlertCircle, CheckCircle2, Receipt, Package, Truck, Building2, Crown, Calendar, Layers, Wallet, BarChart3, LineChart as LineIcon, Coins, Percent, ArrowUpRight, ArrowDownRight, Scale } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Inv { id: string; supplier: string; item_name: string; qty: number; price: number; total: number; status: "BELUM" | "SUDAH"; invoice_date: string; branch_id: string }
+interface Rev { id: string; branch_id: string; revenue_date: string; amount: number }
 
 export default function ManagerDashboard() {
   const { activeBranch } = useBranch();
   const [allInv, setAllInv] = useState<Inv[]>([]);
+  const [allRev, setAllRev] = useState<Rev[]>([]);
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [from, setFrom] = useState<string>("");
@@ -40,12 +42,14 @@ export default function ManagerDashboard() {
 
   useEffect(() => {
     (async () => {
-      const [{ data: invs }, { data: brs }] = await Promise.all([
+      const [{ data: invs }, { data: brs }, { data: revs }] = await Promise.all([
         supabase.from("invoices").select("id, supplier, item_name, qty, price, total, status, invoice_date, branch_id"),
         supabase.from("branches").select("id, name"),
+        supabase.from("daily_revenues" as any).select("id, branch_id, revenue_date, amount"),
       ]);
       setAllInv((invs ?? []) as Inv[]);
       setBranches(brs ?? []);
+      setAllRev(((revs ?? []) as unknown) as Rev[]);
       setLoading(false);
     })();
   }, []);
@@ -56,6 +60,52 @@ export default function ManagerDashboard() {
     if (to && i.invoice_date > to) return false;
     return true;
   }), [allInv, activeBranch, from, to]);
+  const branchRev = useMemo(() => allRev.filter((r) => {
+    if (r.branch_id !== activeBranch?.id) return false;
+    if (from && r.revenue_date < from) return false;
+    if (to && r.revenue_date > to) return false;
+    return true;
+  }), [allRev, activeBranch, from, to]);
+
+  const omsetTotal = branchRev.reduce((s, r) => s + Number(r.amount), 0);
+  const bahanTotal = branchInv.reduce((s, i) => s + Number(i.total), 0);
+  const labaKotor = omsetTotal - bahanTotal;
+  const hppPct = omsetTotal > 0 ? (bahanTotal / omsetTotal) * 100 : 0;
+  const marginPct = omsetTotal > 0 ? (labaKotor / omsetTotal) * 100 : 0;
+
+  const omsetVsBahan = useMemo(() => {
+    const map = new Map<string, { omset: number; bahan: number }>();
+    branchRev.forEach((r) => {
+      const cur = map.get(r.revenue_date) ?? { omset: 0, bahan: 0 };
+      map.set(r.revenue_date, { ...cur, omset: cur.omset + Number(r.amount) });
+    });
+    branchInv.forEach((i) => {
+      const cur = map.get(i.invoice_date) ?? { omset: 0, bahan: 0 };
+      map.set(i.invoice_date, { ...cur, bahan: cur.bahan + Number(i.total) });
+    });
+    return Array.from(map, ([date, v]) => ({
+      date: date.slice(5), full: date,
+      omset: v.omset, bahan: v.bahan, laba: v.omset - v.bahan,
+    })).sort((a, b) => a.full.localeCompare(b.full));
+  }, [branchRev, branchInv]);
+
+  const omsetTrend = useMemo(() => omsetVsBahan.slice(-30).map((d) => ({ date: d.date, omset: d.omset })), [omsetVsBahan]);
+
+  // Bandingkan periode ini vs sebelumnya (panjang yang sama)
+  const periodCompare = useMemo(() => {
+    if (!from || !to) return null;
+    const fd = new Date(from), td = new Date(to);
+    const days = Math.max(1, Math.round((td.getTime() - fd.getTime()) / 86400000) + 1);
+    const prevTo = new Date(fd); prevTo.setDate(prevTo.getDate() - 1);
+    const prevFrom = new Date(prevTo); prevFrom.setDate(prevFrom.getDate() - (days - 1));
+    const pf = prevFrom.toISOString().slice(0, 10);
+    const pt = prevTo.toISOString().slice(0, 10);
+    const pOmset = allRev.filter((r) => r.branch_id === activeBranch?.id && r.revenue_date >= pf && r.revenue_date <= pt).reduce((s, r) => s + Number(r.amount), 0);
+    const pBahan = allInv.filter((i) => i.branch_id === activeBranch?.id && i.invoice_date >= pf && i.invoice_date <= pt).reduce((s, i) => s + Number(i.total), 0);
+    const dOmset = pOmset > 0 ? ((omsetTotal - pOmset) / pOmset) * 100 : 0;
+    const dBahan = pBahan > 0 ? ((bahanTotal - pBahan) / pBahan) * 100 : 0;
+    return { pf, pt, pOmset, pBahan, dOmset, dBahan };
+  }, [from, to, allRev, allInv, activeBranch, omsetTotal, bahanTotal]);
   const today = new Date().toISOString().slice(0, 10);
   const todayTotal = branchInv.filter((i) => i.invoice_date === today).reduce((s, i) => s + Number(i.total), 0);
   const belumTotal = branchInv.filter((i) => i.status === "BELUM").reduce((s, i) => s + Number(i.total), 0);
@@ -161,6 +211,21 @@ export default function ManagerDashboard() {
     }), { total: 0, belum: 0, sudah: 0, count: 0 });
   }, [branchSummary]);
 
+  // Ringkasan omset per cabang
+  const branchOmset = useMemo(() => {
+    const filtered = allRev.filter((r) => {
+      if (from && r.revenue_date < from) return false;
+      if (to && r.revenue_date > to) return false;
+      return true;
+    });
+    return branches.map((b) => {
+      const omset = filtered.filter((r) => r.branch_id === b.id).reduce((s, r) => s + Number(r.amount), 0);
+      const bahan = (branchSummary.find((x) => x.id === b.id)?.total) ?? 0;
+      return { id: b.id, name: b.name, omset, bahan, laba: omset - bahan, hpp: omset > 0 ? (bahan / omset) * 100 : 0 };
+    }).sort((a, b) => b.omset - a.omset);
+  }, [allRev, branches, branchSummary, from, to]);
+  const grandOmset = branchOmset.reduce((s, b) => s + b.omset, 0);
+
   const topBranch = branchSummary[0];
 
   const COLORS = ["hsl(152 72% 32%)", "hsl(152 72% 50%)", "hsl(0 0% 18%)", "hsl(38 92% 55%)", "hsl(152 40% 70%)", "hsl(0 0% 50%)"];
@@ -265,6 +330,84 @@ export default function ManagerDashboard() {
         <StatCard icon={<Truck className="h-5 w-5" />} label="Jumlah Supplier Aktif" value={`${uniqueSuppliers} supplier`} accent="success" />
       </div>
 
+      {/* === RINGKASAN OMSET vs BAHAN BAKU === */}
+      <div className="mt-6 bg-gradient-dark text-secondary-foreground rounded-xl shadow-elegant p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Scale className="h-5 w-5" />
+          <h3 className="font-display font-bold">Omset vs Bahan Baku</h3>
+          {!omsetTotal && (
+            <Link to="/manager/omset" className="ml-auto text-xs underline opacity-90">Input omset →</Link>
+          )}
+        </div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <DarkStat icon={<Coins className="h-4 w-4" />} label="Total Omset" value={formatRupiah(omsetTotal)} delta={periodCompare?.dOmset} />
+          <DarkStat icon={<Package className="h-4 w-4" />} label="Total Bahan Baku" value={formatRupiah(bahanTotal)} delta={periodCompare?.dBahan} invertDelta />
+          <DarkStat icon={<Wallet className="h-4 w-4" />} label="Laba Kotor" value={formatRupiah(labaKotor)} accent={labaKotor >= 0 ? "good" : "bad"} />
+          <DarkStat icon={<Percent className="h-4 w-4" />} label="HPP / Margin" value={omsetTotal > 0 ? `${hppPct.toFixed(1)}% / ${marginPct.toFixed(1)}%` : "-"} />
+        </div>
+        {omsetTotal > 0 && (
+          <div className="mt-3">
+            <div className="h-2 rounded-full bg-white/15 overflow-hidden flex">
+              <div className="h-full bg-warning" style={{ width: `${Math.min(100, hppPct)}%` }} title={`Bahan baku ${hppPct.toFixed(1)}%`} />
+              <div className="h-full bg-success" style={{ width: `${Math.max(0, 100 - hppPct)}%` }} title={`Laba kotor ${marginPct.toFixed(1)}%`} />
+            </div>
+            <div className="flex justify-between text-[11px] mt-1.5 opacity-90">
+              <span>Bahan baku {hppPct.toFixed(1)}%</span>
+              <span>Laba kotor {marginPct.toFixed(1)}%</span>
+            </div>
+          </div>
+        )}
+        {periodCompare && (
+          <div className="text-[11px] opacity-80 mt-3">
+            Dibandingkan periode sebelumnya ({periodCompare.pf} s/d {periodCompare.pt}) — Omset {formatRupiah(periodCompare.pOmset)}, Bahan baku {formatRupiah(periodCompare.pBahan)}
+          </div>
+        )}
+      </div>
+
+      {/* === TREN OMSET === */}
+      <div className="bg-card rounded-xl border shadow-card p-5 mt-6">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-success" />
+            <h3 className="font-display font-bold">Tren Omset (30 hari terakhir)</h3>
+          </div>
+          <Link to="/manager/omset" className="text-xs text-primary font-semibold">Kelola omset →</Link>
+        </div>
+        {omsetTrend.length === 0 ? <EmptyChart /> : (
+          <ResponsiveContainer width="100%" height={240}>
+            <LineChart data={omsetTrend}>
+              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+              <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v) => formatRupiahCompact(v)} />
+              <Tooltip formatter={(v: number) => formatRupiah(v)} />
+              <Line type="monotone" dataKey="omset" name="Omset" stroke="hsl(152 72% 32%)" strokeWidth={2.5} dot={{ r: 3 }} />
+            </LineChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* === PERBANDINGAN OMSET vs BAHAN BAKU CHART === */}
+      <div className="bg-card rounded-xl border shadow-card p-5 mt-6">
+        <div className="flex items-center gap-2 mb-4">
+          <BarChart3 className="h-5 w-5 text-primary" />
+          <h3 className="font-display font-bold">Perbandingan Omset vs Bahan Baku per Hari</h3>
+        </div>
+        {omsetVsBahan.length === 0 ? <EmptyChart /> : (
+          <ResponsiveContainer width="100%" height={280}>
+            <ComposedChart data={omsetVsBahan.slice(-30)}>
+              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+              <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v) => formatRupiahCompact(v)} />
+              <Tooltip formatter={(v: number) => formatRupiah(v)} />
+              <Legend />
+              <Bar dataKey="omset" name="Omset" fill="hsl(152 72% 32%)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="bahan" name="Bahan Baku" fill="hsl(38 92% 55%)" radius={[4, 4, 0, 0]} />
+              <Line type="monotone" dataKey="laba" name="Laba Kotor" stroke="hsl(0 0% 18%)" strokeWidth={2} dot={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
       <div className="bg-card rounded-xl border shadow-card p-5 mt-6">
         <h3 className="font-display font-bold mb-4">Tren Pengeluaran Harian (14 hari terakhir)</h3>
         {trendData.length === 0 ? <EmptyChart /> : (
@@ -366,6 +509,64 @@ export default function ManagerDashboard() {
               </PieChart>
             </ResponsiveContainer>
           )}
+      </div>
+
+      {/* === RINGKASAN OMSET PER CABANG === */}
+      <div className="mt-8">
+        <div className="flex items-center gap-2 mb-3">
+          <Coins className="h-5 w-5 text-success" />
+          <h2 className="font-display text-xl font-bold">Omset & Profitabilitas per Cabang</h2>
+        </div>
+        <div className="bg-card rounded-xl border shadow-card overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
+                <tr>
+                  <th className="text-left px-3 py-2.5">Cabang</th>
+                  <th className="text-right px-3 py-2.5">Omset</th>
+                  <th className="text-right px-3 py-2.5">Bahan Baku</th>
+                  <th className="text-right px-3 py-2.5">Laba Kotor</th>
+                  <th className="text-right px-3 py-2.5">HPP %</th>
+                  <th className="text-right px-3 py-2.5">Margin %</th>
+                </tr>
+              </thead>
+              <tbody>
+                {branchOmset.map((b) => {
+                  const margin = 100 - b.hpp;
+                  const isActive = b.id === activeBranch?.id;
+                  return (
+                    <tr key={b.id} className={`border-t ${isActive ? "bg-accent/40" : ""}`}>
+                      <td className="px-3 py-2.5 font-medium flex items-center gap-2">
+                        <Building2 className="h-3.5 w-3.5 text-muted-foreground" />{b.name}
+                        {isActive && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary text-primary-foreground">aktif</span>}
+                      </td>
+                      <td className="px-3 py-2.5 text-right tabular-nums font-semibold">{formatRupiah(b.omset)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums text-warning">{formatRupiah(b.bahan)}</td>
+                      <td className={`px-3 py-2.5 text-right tabular-nums font-semibold ${b.laba >= 0 ? "text-success" : "text-destructive"}`}>{formatRupiah(b.laba)}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{b.omset > 0 ? `${b.hpp.toFixed(1)}%` : "-"}</td>
+                      <td className="px-3 py-2.5 text-right tabular-nums">{b.omset > 0 ? `${margin.toFixed(1)}%` : "-"}</td>
+                    </tr>
+                  );
+                })}
+                {branchOmset.every((b) => b.omset === 0 && b.bahan === 0) && (
+                  <tr><td colSpan={6} className="text-center text-muted-foreground py-6">Belum ada data omset / bahan baku</td></tr>
+                )}
+              </tbody>
+              {grandOmset > 0 && (
+                <tfoot className="bg-muted/30 font-semibold">
+                  <tr className="border-t">
+                    <td className="px-3 py-2.5">TOTAL</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{formatRupiah(grandOmset)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums text-warning">{formatRupiah(grand.total)}</td>
+                    <td className={`px-3 py-2.5 text-right tabular-nums ${grandOmset - grand.total >= 0 ? "text-success" : "text-destructive"}`}>{formatRupiah(grandOmset - grand.total)}</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{((grand.total / grandOmset) * 100).toFixed(1)}%</td>
+                    <td className="px-3 py-2.5 text-right tabular-nums">{(((grandOmset - grand.total) / grandOmset) * 100).toFixed(1)}%</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </div>
       </div>
 
       <div className="mt-6 bg-card rounded-xl border shadow-card p-5 flex items-center justify-between gap-4">
@@ -553,6 +754,24 @@ function MiniStat({ icon, label, value }: { icon: React.ReactNode; label: string
         <div className="text-xs text-muted-foreground">{label}</div>
         <div className="font-display font-bold truncate">{value}</div>
       </div>
+    </div>
+  );
+}
+
+function DarkStat({ icon, label, value, delta, invertDelta, accent }: { icon: React.ReactNode; label: string; value: string; delta?: number; invertDelta?: boolean; accent?: "good" | "bad" }) {
+  const showDelta = typeof delta === "number" && isFinite(delta) && delta !== 0;
+  const positive = showDelta && (invertDelta ? delta! < 0 : delta! > 0);
+  const valueCls = accent === "good" ? "text-success-foreground" : accent === "bad" ? "text-destructive-foreground" : "";
+  return (
+    <div className="bg-white/10 backdrop-blur rounded-lg p-3">
+      <div className="flex items-center gap-1.5 text-[11px] opacity-90">{icon}{label}</div>
+      <div className={`font-display font-bold text-base mt-1 ${valueCls}`}>{value}</div>
+      {showDelta && (
+        <div className={`text-[11px] mt-0.5 flex items-center gap-0.5 ${positive ? "text-success" : "text-warning"}`}>
+          {delta! > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+          {Math.abs(delta!).toFixed(1)}% vs sebelumnya
+        </div>
+      )}
     </div>
   );
 }
