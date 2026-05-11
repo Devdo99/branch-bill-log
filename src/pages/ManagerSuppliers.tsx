@@ -10,7 +10,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Trash2, Plus, Pencil, Save, X } from "lucide-react";
 
-interface Supplier { id: string; name: string; note: string | null }
+interface Supplier {
+  id: string; name: string; note: string | null;
+  bank_name: string | null; bank_account: string | null; account_holder: string | null;
+}
 
 export default function ManagerSuppliers() {
   const { activeBranch } = useBranch();
@@ -19,14 +22,21 @@ export default function ManagerSuppliers() {
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [bankAccount, setBankAccount] = useState("");
+  const [accountHolder, setAccountHolder] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editNote, setEditNote] = useState("");
+  const [editBankName, setEditBankName] = useState("");
+  const [editBankAccount, setEditBankAccount] = useState("");
+  const [editAccountHolder, setEditAccountHolder] = useState("");
 
   const load = async () => {
     if (!activeBranch) return;
     setLoading(true);
-    const { data, error } = await supabase.from("suppliers").select("id, name, note")
+    const { data, error } = await supabase.from("suppliers")
+      .select("id, name, note, bank_name, bank_account, account_holder")
       .eq("branch_id", activeBranch.id).order("name");
     if (error) toast.error(error.message);
     setList((data ?? []) as Supplier[]);
@@ -41,17 +51,28 @@ export default function ManagerSuppliers() {
     if (!trimmed) return toast.error("Nama supplier wajib diisi");
     const { error } = await supabase.from("suppliers").insert({
       branch_id: activeBranch.id, name: trimmed, note: note.trim() || null, created_by: user.id,
+      bank_name: bankName.trim() || null,
+      bank_account: bankAccount.trim() || null,
+      account_holder: accountHolder.trim() || null,
     });
     if (error) return toast.error(error.message);
     toast.success("Supplier ditambahkan");
-    setName(""); setNote(""); load();
+    setName(""); setNote(""); setBankName(""); setBankAccount(""); setAccountHolder(""); load();
   };
 
-  const startEdit = (s: Supplier) => { setEditId(s.id); setEditName(s.name); setEditNote(s.note ?? ""); };
+  const startEdit = (s: Supplier) => {
+    setEditId(s.id); setEditName(s.name); setEditNote(s.note ?? "");
+    setEditBankName(s.bank_name ?? ""); setEditBankAccount(s.bank_account ?? ""); setEditAccountHolder(s.account_holder ?? "");
+  };
   const saveEdit = async () => {
     if (!editId) return;
     const { error } = await supabase.from("suppliers")
-      .update({ name: editName.trim(), note: editNote.trim() || null }).eq("id", editId);
+      .update({
+        name: editName.trim(), note: editNote.trim() || null,
+        bank_name: editBankName.trim() || null,
+        bank_account: editBankAccount.trim() || null,
+        account_holder: editAccountHolder.trim() || null,
+      }).eq("id", editId);
     if (error) return toast.error(error.message);
     toast.success("Tersimpan"); setEditId(null); load();
   };
@@ -69,6 +90,11 @@ export default function ManagerSuppliers() {
           <h3 className="font-display font-bold">Tambah Supplier</h3>
           <div className="space-y-1.5"><Label>Nama Supplier *</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="PT Sumber Pangan" required /></div>
           <div className="space-y-1.5"><Label>Catatan (opsional)</Label><Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="No telp, alamat, jenis barang…" rows={3} /></div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1.5"><Label>Bank</Label><Input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="BCA / BRI / Mandiri" /></div>
+            <div className="space-y-1.5"><Label>No. Rekening</Label><Input value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} placeholder="1234567890" /></div>
+          </div>
+          <div className="space-y-1.5"><Label>Atas Nama</Label><Input value={accountHolder} onChange={(e) => setAccountHolder(e.target.value)} placeholder="Nama pemilik rekening" /></div>
           <Button type="submit" className="w-full bg-gradient-primary"><Plus className="h-4 w-4 mr-1" /> Simpan</Button>
         </form>
 
@@ -84,6 +110,11 @@ export default function ManagerSuppliers() {
                     <div className="flex-1 space-y-2">
                       <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
                       <Textarea value={editNote} onChange={(e) => setEditNote(e.target.value)} rows={2} />
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input value={editBankName} onChange={(e) => setEditBankName(e.target.value)} placeholder="Bank" />
+                        <Input value={editBankAccount} onChange={(e) => setEditBankAccount(e.target.value)} placeholder="No. Rekening" />
+                      </div>
+                      <Input value={editAccountHolder} onChange={(e) => setEditAccountHolder(e.target.value)} placeholder="Atas Nama" />
                       <div className="flex gap-2">
                         <Button size="sm" onClick={saveEdit}><Save className="h-4 w-4 mr-1" />Simpan</Button>
                         <Button size="sm" variant="ghost" onClick={() => setEditId(null)}><X className="h-4 w-4" /></Button>
@@ -94,6 +125,12 @@ export default function ManagerSuppliers() {
                       <div className="flex-1 min-w-0">
                         <div className="font-semibold">{s.name}</div>
                         {s.note && <div className="text-sm text-muted-foreground whitespace-pre-wrap">{s.note}</div>}
+                        {(s.bank_name || s.bank_account || s.account_holder) && (
+                          <div className="mt-1 text-xs text-foreground/80 bg-muted/60 rounded px-2 py-1 inline-block">
+                            🏦 {s.bank_name || "-"} • <span className="font-mono">{s.bank_account || "-"}</span>
+                            {s.account_holder && <> • a.n. {s.account_holder}</>}
+                          </div>
+                        )}
                       </div>
                       <Button size="icon" variant="ghost" onClick={() => startEdit(s)}><Pencil className="h-4 w-4" /></Button>
                       <Button size="icon" variant="ghost" onClick={() => remove(s.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
