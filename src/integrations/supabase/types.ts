@@ -102,6 +102,47 @@ export type Database = {
         }
         Relationships: []
       }
+      daily_revenues: {
+        Row: {
+          amount: number
+          branch_id: string
+          created_at: string
+          created_by: string
+          id: string
+          note: string | null
+          revenue_date: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          branch_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          note?: string | null
+          revenue_date: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          branch_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          note?: string | null
+          revenue_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_revenues_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invoices: {
         Row: {
           branch_id: string
@@ -184,6 +225,9 @@ export type Database = {
       }
       suppliers: {
         Row: {
+          account_holder: string | null
+          bank_account: string | null
+          bank_name: string | null
           branch_id: string
           created_at: string
           created_by: string
@@ -193,6 +237,9 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          account_holder?: string | null
+          bank_account?: string | null
+          bank_name?: string | null
           branch_id: string
           created_at?: string
           created_by: string
@@ -202,6 +249,9 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          account_holder?: string | null
+          bank_account?: string | null
+          bank_name?: string | null
           branch_id?: string
           created_at?: string
           created_by?: string
