@@ -74,6 +74,12 @@ export default function ManagerInvoices() {
   const [rotate, setRotate] = useState(0);
   const [editing, setEditing] = useState<Inv | null>(null);
   const [editDate, setEditDate] = useState("");
+  const [editSupplier, setEditSupplier] = useState("");
+  const [editItem, setEditItem] = useState("");
+  const [editQty, setEditQty] = useState<string>("0");
+  const [editPrice, setEditPrice] = useState<string>("0");
+  const [editStatus, setEditStatus] = useState<"BELUM" | "SUDAH">("BELUM");
+  const [savingEdit, setSavingEdit] = useState(false);
   const [deleting, setDeleting] = useState<Inv | null>(null);
   const [waOpen, setWaOpen] = useState(false);
   const [waPhone, setWaPhone] = useState<string>(() => localStorage.getItem("wa_phone") ?? "");
@@ -130,11 +136,39 @@ export default function ManagerInvoices() {
     load();
   };
 
-  const saveEditDate = async () => {
-    if (!editing || !editDate) return;
-    const { error } = await supabase.from("invoices").update({ invoice_date: editDate }).eq("id", editing.id);
+  const openEdit = (inv: Inv) => {
+    setEditing(inv);
+    setEditDate(inv.invoice_date);
+    setEditSupplier(inv.supplier);
+    setEditItem(inv.item_name);
+    setEditQty(String(inv.qty));
+    setEditPrice(String(inv.price));
+    setEditStatus(inv.status);
+  };
+  const saveEdit = async () => {
+    if (!editing) return;
+    const qty = Number(editQty);
+    const price = Number(editPrice);
+    if (!editDate || !editSupplier.trim() || !editItem.trim() || !isFinite(qty) || !isFinite(price) || qty <= 0 || price < 0) {
+      return toast.error("Isi semua field dengan benar");
+    }
+    setSavingEdit(true);
+    const total = qty * price;
+    const wasPaid = editing.status === "SUDAH";
+    const nowPaid = editStatus === "SUDAH";
+    const payload: any = {
+      invoice_date: editDate,
+      supplier: editSupplier.trim(),
+      item_name: editItem.trim(),
+      qty, price, total,
+      status: editStatus,
+    };
+    if (!wasPaid && nowPaid) { payload.paid_at = new Date().toISOString(); payload.paid_by = user!.id; }
+    if (wasPaid && !nowPaid) { payload.paid_at = null; payload.paid_by = null; }
+    const { error } = await supabase.from("invoices").update(payload).eq("id", editing.id);
+    setSavingEdit(false);
     if (error) return toast.error(error.message);
-    toast.success("Tanggal diperbarui");
+    toast.success("Nota diperbarui");
     setEditing(null);
     load();
   };
@@ -325,7 +359,7 @@ export default function ManagerInvoices() {
                   <td className="p-3">
                     <div className="flex items-center justify-end gap-1">
                       <Button size="icon" variant="ghost" title="Detail" onClick={() => openDetail(i)}><Eye className="h-4 w-4" /></Button>
-                      <Button size="icon" variant="ghost" title="Edit tanggal" onClick={() => { setEditing(i); setEditDate(i.invoice_date); }}><Pencil className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="ghost" title="Edit nota" onClick={() => openEdit(i)}><Pencil className="h-4 w-4" /></Button>
                       <Button size="icon" variant="ghost" title="Hapus" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleting(i)}><Trash2 className="h-4 w-4" /></Button>
                     </div>
                   </td>
@@ -382,18 +416,58 @@ export default function ManagerInvoices() {
       </Dialog>
 
       <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><CalendarDays className="h-5 w-5" /> Edit Tanggal Nota</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Pencil className="h-5 w-5" /> Edit Nota</DialogTitle></DialogHeader>
           {editing && (
             <div className="space-y-3">
-              <div className="text-sm text-muted-foreground">{editing.supplier} • {editing.item_name}</div>
-              <div className="space-y-1.5">
-                <Label>Tanggal nota</Label>
-                <Input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5 col-span-2">
+                  <Label>Tanggal</Label>
+                  <Input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+                </div>
+                <div className="space-y-1.5 col-span-2">
+                  <Label>Supplier</Label>
+                  {supplierOptions.length > 0 ? (
+                    <Select value={supplierOptions.includes(editSupplier) ? editSupplier : "__custom"} onValueChange={(v) => v !== "__custom" && setEditSupplier(v)}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {supplierOptions.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                        <SelectItem value="__custom">— ketik manual —</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  ) : null}
+                  <Input value={editSupplier} onChange={(e) => setEditSupplier(e.target.value)} placeholder="Nama supplier" />
+                </div>
+                <div className="space-y-1.5 col-span-2">
+                  <Label>Nama barang</Label>
+                  <Input value={editItem} onChange={(e) => setEditItem(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Qty</Label>
+                  <Input type="number" inputMode="decimal" value={editQty} onChange={(e) => setEditQty(e.target.value)} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Harga satuan</Label>
+                  <Input type="number" inputMode="decimal" value={editPrice} onChange={(e) => setEditPrice(e.target.value)} />
+                </div>
+                <div className="space-y-1.5 col-span-2">
+                  <Label>Status</Label>
+                  <Select value={editStatus} onValueChange={(v: any) => setEditStatus(v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="BELUM">BELUM</SelectItem>
+                      <SelectItem value="SUDAH">SUDAH</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="col-span-2 flex justify-between items-center bg-muted/40 rounded-md px-3 py-2">
+                  <span className="text-muted-foreground text-sm">Total</span>
+                  <span className="font-display font-bold">{formatRupiah((Number(editQty) || 0) * (Number(editPrice) || 0))}</span>
+                </div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="outline" onClick={() => setEditing(null)}>Batal</Button>
-                <Button onClick={saveEditDate}>Simpan</Button>
+                <Button onClick={saveEdit} disabled={savingEdit}>{savingEdit ? "Menyimpan…" : "Simpan"}</Button>
               </div>
             </div>
           )}
