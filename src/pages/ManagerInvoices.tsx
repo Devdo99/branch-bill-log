@@ -34,6 +34,15 @@ Rincian:
 *Rekening Supplier (Belum Dibayar):*
 {rekening}`;
 
+// Format per kelompok supplier di dalam {rincian}
+// Variabel: {supplier} {jumlah} {subtotal} {items}
+const DEFAULT_GROUP_TEMPLATE = `*{supplier}* — {jumlah} nota • {subtotal}
+{items}`;
+
+// Format per item di dalam {items}
+// Variabel: {no} {tanggal} {item} {qty} {harga} {total} {status}
+const DEFAULT_ITEM_TEMPLATE = `{no}. {tanggal} — {item} ({qty} × {harga}) = *{total}* [{status}]`;
+
 interface Inv {
   id: string; invoice_date: string; supplier: string; item_name: string;
   qty: number; price: number; total: number; status: "BELUM" | "SUDAH";
@@ -63,6 +72,8 @@ export default function ManagerInvoices() {
   const [waOpen, setWaOpen] = useState(false);
   const [waPhone, setWaPhone] = useState<string>(() => localStorage.getItem("wa_phone") ?? "");
   const [waTemplate, setWaTemplate] = useState<string>(() => localStorage.getItem("wa_template") ?? DEFAULT_WA_TEMPLATE);
+  const [waGroupTpl, setWaGroupTpl] = useState<string>(() => localStorage.getItem("wa_group_tpl") ?? DEFAULT_GROUP_TEMPLATE);
+  const [waItemTpl, setWaItemTpl] = useState<string>(() => localStorage.getItem("wa_item_tpl") ?? DEFAULT_ITEM_TEMPLATE);
   const [waText, setWaText] = useState<string>("");
 
   const load = async () => {
@@ -143,9 +154,31 @@ export default function ManagerInvoices() {
   };
 
   const buildText = (rows: Inv[]) => {
-    const lines = rows.map((i, idx) =>
-      `${idx + 1}. ${formatDate(i.invoice_date)} • ${i.supplier}\n   ${i.item_name} (${i.qty} × ${formatRupiah(i.price)}) = *${formatRupiah(i.total)}* — ${i.status}`
-    ).join("\n");
+    // Kelompokkan per supplier — satu judul per supplier
+    const groups = new Map<string, Inv[]>();
+    rows.forEach((r) => {
+      const arr = groups.get(r.supplier) ?? [];
+      arr.push(r);
+      groups.set(r.supplier, arr);
+    });
+    const renderItem = (i: Inv, idx: number) =>
+      waItemTpl
+        .split("{no}").join(String(idx + 1))
+        .split("{tanggal}").join(formatDate(i.invoice_date))
+        .split("{item}").join(i.item_name)
+        .split("{qty}").join(String(i.qty))
+        .split("{harga}").join(formatRupiah(Number(i.price)))
+        .split("{total}").join(formatRupiah(Number(i.total)))
+        .split("{status}").join(i.status);
+    const lines = Array.from(groups.entries()).map(([supplierName, items]) => {
+      const subtotal = items.reduce((s, x) => s + Number(x.total), 0);
+      const itemsText = items.map((i, idx) => renderItem(i, idx)).join("\n");
+      return waGroupTpl
+        .split("{supplier}").join(supplierName)
+        .split("{jumlah}").join(String(items.length))
+        .split("{subtotal}").join(formatRupiah(subtotal))
+        .split("{items}").join(itemsText);
+    }).join("\n\n");
     const total = rows.reduce((s, i) => s + Number(i.total), 0);
     const paid = rows.filter((r) => r.status === "SUDAH").reduce((s, i) => s + Number(i.total), 0);
     const unpaid = total - paid;
@@ -176,6 +209,8 @@ export default function ManagerInvoices() {
   const sendWhatsApp = () => {
     localStorage.setItem("wa_phone", waPhone);
     localStorage.setItem("wa_template", waTemplate);
+    localStorage.setItem("wa_group_tpl", waGroupTpl);
+    localStorage.setItem("wa_item_tpl", waItemTpl);
     const phone = waPhone.replace(/\D/g, "");
     const url = phone
       ? `https://wa.me/${phone}?text=${encodeURIComponent(waText)}`
@@ -388,7 +423,12 @@ export default function ManagerInvoices() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label className="flex items-center gap-1.5"><Settings2 className="h-3.5 w-3.5" /> Isi pesan (bisa diedit)</Label>
-                <Button size="sm" variant="ghost" onClick={() => { setWaTemplate(DEFAULT_WA_TEMPLATE); setWaText(buildText(filtered)); }}>
+                <Button size="sm" variant="ghost" onClick={() => {
+                  setWaTemplate(DEFAULT_WA_TEMPLATE);
+                  setWaGroupTpl(DEFAULT_GROUP_TEMPLATE);
+                  setWaItemTpl(DEFAULT_ITEM_TEMPLATE);
+                  setTimeout(() => setWaText(buildText(filtered)), 0);
+                }}>
                   <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reset template
                 </Button>
               </div>
@@ -397,10 +437,29 @@ export default function ManagerInvoices() {
                 Variabel template: <code>{"{cabang} {periode} {tanggal} {jumlah} {total} {sudah} {belum} {rincian} {rekening}"}</code>
               </div>
             </div>
-            <details className="text-xs">
-              <summary className="cursor-pointer text-primary font-medium">Edit template default (tersimpan otomatis)</summary>
-              <Textarea rows={8} value={waTemplate} onChange={(e) => setWaTemplate(e.target.value)} className="font-mono mt-2" />
-              <Button size="sm" variant="outline" className="mt-2" onClick={() => setWaText(buildText(filtered))}>Terapkan ke pesan</Button>
+            <details className="text-xs rounded-lg border bg-muted/30 p-3" open>
+              <summary className="cursor-pointer text-primary font-medium">Atur format rincian (per supplier & per item)</summary>
+              <div className="mt-3 space-y-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Format kelompok supplier</Label>
+                  <Textarea rows={3} value={waGroupTpl} onChange={(e) => setWaGroupTpl(e.target.value)} className="font-mono text-xs" />
+                  <div className="text-[11px] text-muted-foreground">
+                    Variabel: <code>{"{supplier} {jumlah} {subtotal} {items}"}</code>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Format setiap item</Label>
+                  <Textarea rows={2} value={waItemTpl} onChange={(e) => setWaItemTpl(e.target.value)} className="font-mono text-xs" />
+                  <div className="text-[11px] text-muted-foreground">
+                    Variabel: <code>{"{no} {tanggal} {item} {qty} {harga} {total} {status}"}</code>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Template utama</Label>
+                  <Textarea rows={6} value={waTemplate} onChange={(e) => setWaTemplate(e.target.value)} className="font-mono text-xs" />
+                </div>
+                <Button size="sm" variant="outline" onClick={() => setWaText(buildText(filtered))}>Terapkan ke pesan</Button>
+              </div>
             </details>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setWaOpen(false)}>Batal</Button>
