@@ -74,6 +74,12 @@ export default function ManagerInvoices() {
   const [rotate, setRotate] = useState(0);
   const [editing, setEditing] = useState<Inv | null>(null);
   const [editDate, setEditDate] = useState("");
+  const [editSupplier, setEditSupplier] = useState("");
+  const [editItem, setEditItem] = useState("");
+  const [editQty, setEditQty] = useState<string>("0");
+  const [editPrice, setEditPrice] = useState<string>("0");
+  const [editStatus, setEditStatus] = useState<"BELUM" | "SUDAH">("BELUM");
+  const [savingEdit, setSavingEdit] = useState(false);
   const [deleting, setDeleting] = useState<Inv | null>(null);
   const [waOpen, setWaOpen] = useState(false);
   const [waPhone, setWaPhone] = useState<string>(() => localStorage.getItem("wa_phone") ?? "");
@@ -130,11 +136,39 @@ export default function ManagerInvoices() {
     load();
   };
 
-  const saveEditDate = async () => {
-    if (!editing || !editDate) return;
-    const { error } = await supabase.from("invoices").update({ invoice_date: editDate }).eq("id", editing.id);
+  const openEdit = (inv: Inv) => {
+    setEditing(inv);
+    setEditDate(inv.invoice_date);
+    setEditSupplier(inv.supplier);
+    setEditItem(inv.item_name);
+    setEditQty(String(inv.qty));
+    setEditPrice(String(inv.price));
+    setEditStatus(inv.status);
+  };
+  const saveEdit = async () => {
+    if (!editing) return;
+    const qty = Number(editQty);
+    const price = Number(editPrice);
+    if (!editDate || !editSupplier.trim() || !editItem.trim() || !isFinite(qty) || !isFinite(price) || qty <= 0 || price < 0) {
+      return toast.error("Isi semua field dengan benar");
+    }
+    setSavingEdit(true);
+    const total = qty * price;
+    const wasPaid = editing.status === "SUDAH";
+    const nowPaid = editStatus === "SUDAH";
+    const payload: any = {
+      invoice_date: editDate,
+      supplier: editSupplier.trim(),
+      item_name: editItem.trim(),
+      qty, price, total,
+      status: editStatus,
+    };
+    if (!wasPaid && nowPaid) { payload.paid_at = new Date().toISOString(); payload.paid_by = user!.id; }
+    if (wasPaid && !nowPaid) { payload.paid_at = null; payload.paid_by = null; }
+    const { error } = await supabase.from("invoices").update(payload).eq("id", editing.id);
+    setSavingEdit(false);
     if (error) return toast.error(error.message);
-    toast.success("Tanggal diperbarui");
+    toast.success("Nota diperbarui");
     setEditing(null);
     load();
   };
