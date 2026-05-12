@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import AppShell from "@/components/AppShell";
 import { useBranch } from "@/contexts/BranchContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -8,11 +8,47 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Trash2, Plus, Pencil, Save, X } from "lucide-react";
+import { Trash2, Plus, Pencil, Save, X, Download, Upload, FileSpreadsheet } from "lucide-react";
 
 interface Supplier {
   id: string; name: string; note: string | null;
   bank_name: string | null; bank_account: string | null; account_holder: string | null;
+}
+
+const CSV_HEADERS = ["name", "note", "bank_name", "bank_account", "account_holder"];
+const csvEscape = (v: string) => {
+  const s = v ?? "";
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+const buildCsv = (rows: string[][]) => rows.map(r => r.map(csvEscape).join(",")).join("\n");
+const downloadFile = (content: string, name: string) => {
+  const blob = new Blob(["\uFEFF" + content], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+function parseCsv(text: string): string[][] {
+  const rows: string[][] = [];
+  let cur: string[] = [], val = "", inQ = false;
+  text = text.replace(/^\uFEFF/, "");
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"' && text[i + 1] === '"') { val += '"'; i++; }
+      else if (c === '"') inQ = false;
+      else val += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ",") { cur.push(val); val = ""; }
+      else if (c === "\n" || c === "\r") {
+        if (c === "\r" && text[i + 1] === "\n") i++;
+        cur.push(val); rows.push(cur); cur = []; val = "";
+      } else val += c;
+    }
+  }
+  if (val.length || cur.length) { cur.push(val); rows.push(cur); }
+  return rows.filter(r => r.length && r.some(x => x.trim() !== ""));
 }
 
 export default function ManagerSuppliers() {
@@ -31,6 +67,8 @@ export default function ManagerSuppliers() {
   const [editBankName, setEditBankName] = useState("");
   const [editBankAccount, setEditBankAccount] = useState("");
   const [editAccountHolder, setEditAccountHolder] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
 
   const load = async () => {
     if (!activeBranch) return;
@@ -83,6 +121,56 @@ export default function ManagerSuppliers() {
     toast.success("Dihapus"); load();
   };
 
+  const exportCsv = () => {
+    const rows = [CSV_HEADERS, ...list.map(s => [s.name, s.note ?? "", s.bank_name ?? "", s.bank_account ?? "", s.account_holder ?? ""])];
+    downloadFile(buildCsv(rows), `suppliers-${activeBranch?.name ?? "branch"}-${new Date().toISOString().slice(0, 10)}.csv`);
+    toast.success(`${list.length} supplier diekspor`);
+  };
+  const downloadTemplate = () => {
+    const rows = [CSV_HEADERS, ["PT Sumber Pangan", "Pemasok sayur", "BCA", "1234567890", "Budi Santoso"], ["UD Maju Jaya", "", "BRI", "987654321", "Ani"]];
+    downloadFile(buildCsv(rows), "template-supplier.csv");
+  };
+  const onPickFile = () => fileRef.current?.click();
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]; e.target.value = "";
+    if (!f || !activeBranch || !user) return;
+    setImporting(true);
+    try {
+      const text = await f.text();
+      const parsed = parseCsv(text);
+      if (parsed.length < 2) { toast.error("File kosong / tidak ada data"); return; }
+      const header = parsed[0].map(h => h.trim().toLowerCase());
+      const idx = (k: string) => header.indexOf(k);
+      if (idx("name") < 0) { toast.error("Kolom 'name' wajib ada"); return; }
+      const existing = new Map(list.map(s => [s.name.toLowerCase(), s]));
+      let inserted = 0, updated = 0, skipped = 0;
+      for (let r = 1; r < parsed.length; r++) {
+        const row = parsed[r];
+        const name = (row[idx("name")] ?? "").trim();
+        if (!name) { skipped++; continue; }
+        const payload = {
+          name,
+          note: (idx("note") >= 0 ? row[idx("note")]?.trim() : "") || null,
+          bank_name: (idx("bank_name") >= 0 ? row[idx("bank_name")]?.trim() : "") || null,
+          bank_account: (idx("bank_account") >= 0 ? row[idx("bank_account")]?.trim() : "") || null,
+          account_holder: (idx("account_holder") >= 0 ? row[idx("account_holder")]?.trim() : "") || null,
+        };
+        const ex = existing.get(name.toLowerCase());
+        if (ex) {
+          const { error } = await supabase.from("suppliers").update(payload).eq("id", ex.id);
+          if (error) { skipped++; } else updated++;
+        } else {
+          const { error } = await supabase.from("suppliers").insert({ ...payload, branch_id: activeBranch.id, created_by: user.id });
+          if (error) { skipped++; } else inserted++;
+        }
+      }
+      toast.success(`Import selesai • ${inserted} baru, ${updated} diperbarui${skipped ? `, ${skipped} dilewati` : ""}`);
+      load();
+    } catch (err: any) {
+      toast.error("Gagal mengimpor: " + (err?.message ?? "format tidak valid"));
+    } finally { setImporting(false); }
+  };
+
   return (
     <AppShell title={`Supplier — ${activeBranch?.name}`}>
       <div className="grid lg:grid-cols-3 gap-6">
@@ -99,7 +187,13 @@ export default function ManagerSuppliers() {
         </form>
 
         <div className="lg:col-span-2 bg-card border rounded-xl shadow-card overflow-hidden">
-          <div className="p-5 border-b"><h3 className="font-display font-bold">Daftar Supplier ({list.length})</h3></div>
+          <div className="p-4 border-b flex flex-wrap items-center gap-2">
+            <h3 className="font-display font-bold mr-auto">Daftar Supplier ({list.length})</h3>
+            <Button size="sm" variant="outline" onClick={downloadTemplate}><FileSpreadsheet className="h-4 w-4 mr-1" />Template</Button>
+            <Button size="sm" variant="outline" onClick={exportCsv} disabled={list.length === 0}><Download className="h-4 w-4 mr-1" />Export</Button>
+            <Button size="sm" onClick={onPickFile} disabled={importing} className="bg-gradient-primary"><Upload className="h-4 w-4 mr-1" />{importing ? "Mengimpor…" : "Import"}</Button>
+            <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onFile} />
+          </div>
           {loading ? <p className="p-5 text-muted-foreground">Memuat…</p>
            : list.length === 0 ? <p className="p-5 text-muted-foreground text-sm">Belum ada supplier. Tambahkan agar kasir tinggal pilih saat input nota.</p>
            : (
