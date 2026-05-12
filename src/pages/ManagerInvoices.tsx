@@ -60,8 +60,14 @@ export default function ManagerInvoices() {
   const [supplierOptions, setSupplierOptions] = useState<string[]>([]);
   const [supplierBank, setSupplierBank] = useState<Record<string, { bank_name: string | null; bank_account: string | null; account_holder: string | null }>>({});
   const [status, setStatus] = useState<"all" | "BELUM" | "SUDAH">("all");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [from, setFrom] = useState(() => {
+    const n = new Date();
+    return new Date(n.getFullYear(), n.getMonth(), 1).toISOString().slice(0, 10);
+  });
+  const [to, setTo] = useState(() => {
+    const n = new Date();
+    return new Date(n.getFullYear(), n.getMonth() + 1, 0).toISOString().slice(0, 10);
+  });
   const [detail, setDetail] = useState<Inv | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);

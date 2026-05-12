@@ -27,8 +27,14 @@ export default function ManagerOmset() {
   const [editAmount, setEditAmount] = useState("");
   const [editNote, setEditNote] = useState("");
   const [editDate, setEditDate] = useState("");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [from, setFrom] = useState(() => {
+    const n = new Date();
+    return new Date(n.getFullYear(), n.getMonth(), 1).toISOString().slice(0, 10);
+  });
+  const [to, setTo] = useState(() => {
+    const n = new Date();
+    return new Date(n.getFullYear(), n.getMonth() + 1, 0).toISOString().slice(0, 10);
+  });
 
   const load = async () => {
     if (!activeBranch) return;

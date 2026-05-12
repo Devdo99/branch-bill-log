@@ -19,10 +19,12 @@ export default function ManagerDashboard() {
   const [allRev, setAllRev] = useState<Rev[]>([]);
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [from, setFrom] = useState<string>("");
-  const [to, setTo] = useState<string>("");
-  const [periodMode, setPeriodMode] = useState<"custom" | "bulan" | "kuartal" | "semester" | "tahun">("custom");
   const now = new Date();
+  const _mFrom = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
+  const _mTo = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
+  const [from, setFrom] = useState<string>(_mFrom);
+  const [to, setTo] = useState<string>(_mTo);
+  const [periodMode, setPeriodMode] = useState<"custom" | "bulan" | "kuartal" | "semester" | "tahun">("bulan");
   const [year, setYear] = useState<number>(now.getFullYear());
   const [month, setMonth] = useState<number>(now.getMonth() + 1); // 1-12
   const [quarter, setQuarter] = useState<number>(Math.floor(now.getMonth() / 3) + 1);
