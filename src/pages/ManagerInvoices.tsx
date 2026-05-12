@@ -34,6 +34,15 @@ Rincian:
 *Rekening Supplier (Belum Dibayar):*
 {rekening}`;
 
+// Format per kelompok supplier di dalam {rincian}
+// Variabel: {supplier} {jumlah} {subtotal} {items}
+const DEFAULT_GROUP_TEMPLATE = `*{supplier}* — {jumlah} nota • {subtotal}
+{items}`;
+
+// Format per item di dalam {items}
+// Variabel: {no} {tanggal} {item} {qty} {harga} {total} {status}
+const DEFAULT_ITEM_TEMPLATE = `{no}. {tanggal} — {item} ({qty} × {harga}) = *{total}* [{status}]`;
+
 interface Inv {
   id: string; invoice_date: string; supplier: string; item_name: string;
   qty: number; price: number; total: number; status: "BELUM" | "SUDAH";
@@ -63,6 +72,8 @@ export default function ManagerInvoices() {
   const [waOpen, setWaOpen] = useState(false);
   const [waPhone, setWaPhone] = useState<string>(() => localStorage.getItem("wa_phone") ?? "");
   const [waTemplate, setWaTemplate] = useState<string>(() => localStorage.getItem("wa_template") ?? DEFAULT_WA_TEMPLATE);
+  const [waGroupTpl, setWaGroupTpl] = useState<string>(() => localStorage.getItem("wa_group_tpl") ?? DEFAULT_GROUP_TEMPLATE);
+  const [waItemTpl, setWaItemTpl] = useState<string>(() => localStorage.getItem("wa_item_tpl") ?? DEFAULT_ITEM_TEMPLATE);
   const [waText, setWaText] = useState<string>("");
 
   const load = async () => {
@@ -143,9 +154,31 @@ export default function ManagerInvoices() {
   };
 
   const buildText = (rows: Inv[]) => {
-    const lines = rows.map((i, idx) =>
-      `${idx + 1}. ${formatDate(i.invoice_date)} • ${i.supplier}\n   ${i.item_name} (${i.qty} × ${formatRupiah(i.price)}) = *${formatRupiah(i.total)}* — ${i.status}`
-    ).join("\n");
+    // Kelompokkan per supplier — satu judul per supplier
+    const groups = new Map<string, Inv[]>();
+    rows.forEach((r) => {
+      const arr = groups.get(r.supplier) ?? [];
+      arr.push(r);
+      groups.set(r.supplier, arr);
+    });
+    const renderItem = (i: Inv, idx: number) =>
+      waItemTpl
+        .split("{no}").join(String(idx + 1))
+        .split("{tanggal}").join(formatDate(i.invoice_date))
+        .split("{item}").join(i.item_name)
+        .split("{qty}").join(String(i.qty))
+        .split("{harga}").join(formatRupiah(Number(i.price)))
+        .split("{total}").join(formatRupiah(Number(i.total)))
+        .split("{status}").join(i.status);
+    const lines = Array.from(groups.entries()).map(([supplierName, items]) => {
+      const subtotal = items.reduce((s, x) => s + Number(x.total), 0);
+      const itemsText = items.map((i, idx) => renderItem(i, idx)).join("\n");
+      return waGroupTpl
+        .split("{supplier}").join(supplierName)
+        .split("{jumlah}").join(String(items.length))
+        .split("{subtotal}").join(formatRupiah(subtotal))
+        .split("{items}").join(itemsText);
+    }).join("\n\n");
     const total = rows.reduce((s, i) => s + Number(i.total), 0);
     const paid = rows.filter((r) => r.status === "SUDAH").reduce((s, i) => s + Number(i.total), 0);
     const unpaid = total - paid;
@@ -176,6 +209,8 @@ export default function ManagerInvoices() {
   const sendWhatsApp = () => {
     localStorage.setItem("wa_phone", waPhone);
     localStorage.setItem("wa_template", waTemplate);
+    localStorage.setItem("wa_group_tpl", waGroupTpl);
+    localStorage.setItem("wa_item_tpl", waItemTpl);
     const phone = waPhone.replace(/\D/g, "");
     const url = phone
       ? `https://wa.me/${phone}?text=${encodeURIComponent(waText)}`
