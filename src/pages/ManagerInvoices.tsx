@@ -423,7 +423,12 @@ export default function ManagerInvoices() {
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label className="flex items-center gap-1.5"><Settings2 className="h-3.5 w-3.5" /> Isi pesan (bisa diedit)</Label>
-                <Button size="sm" variant="ghost" onClick={() => { setWaTemplate(DEFAULT_WA_TEMPLATE); setWaText(buildText(filtered)); }}>
+                <Button size="sm" variant="ghost" onClick={() => {
+                  setWaTemplate(DEFAULT_WA_TEMPLATE);
+                  setWaGroupTpl(DEFAULT_GROUP_TEMPLATE);
+                  setWaItemTpl(DEFAULT_ITEM_TEMPLATE);
+                  setTimeout(() => setWaText(buildText(filtered)), 0);
+                }}>
                   <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reset template
                 </Button>
               </div>
@@ -432,10 +437,29 @@ export default function ManagerInvoices() {
                 Variabel template: <code>{"{cabang} {periode} {tanggal} {jumlah} {total} {sudah} {belum} {rincian} {rekening}"}</code>
               </div>
             </div>
-            <details className="text-xs">
-              <summary className="cursor-pointer text-primary font-medium">Edit template default (tersimpan otomatis)</summary>
-              <Textarea rows={8} value={waTemplate} onChange={(e) => setWaTemplate(e.target.value)} className="font-mono mt-2" />
-              <Button size="sm" variant="outline" className="mt-2" onClick={() => setWaText(buildText(filtered))}>Terapkan ke pesan</Button>
+            <details className="text-xs rounded-lg border bg-muted/30 p-3" open>
+              <summary className="cursor-pointer text-primary font-medium">Atur format rincian (per supplier & per item)</summary>
+              <div className="mt-3 space-y-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Format kelompok supplier</Label>
+                  <Textarea rows={3} value={waGroupTpl} onChange={(e) => setWaGroupTpl(e.target.value)} className="font-mono text-xs" />
+                  <div className="text-[11px] text-muted-foreground">
+                    Variabel: <code>{"{supplier} {jumlah} {subtotal} {items}"}</code>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Format setiap item</Label>
+                  <Textarea rows={2} value={waItemTpl} onChange={(e) => setWaItemTpl(e.target.value)} className="font-mono text-xs" />
+                  <div className="text-[11px] text-muted-foreground">
+                    Variabel: <code>{"{no} {tanggal} {item} {qty} {harga} {total} {status}"}</code>
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Template utama</Label>
+                  <Textarea rows={6} value={waTemplate} onChange={(e) => setWaTemplate(e.target.value)} className="font-mono text-xs" />
+                </div>
+                <Button size="sm" variant="outline" onClick={() => setWaText(buildText(filtered))}>Terapkan ke pesan</Button>
+              </div>
             </details>
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setWaOpen(false)}>Batal</Button>
