@@ -774,10 +774,13 @@ export default function ManagerInvoices() {
                 <Button size="sm" variant="outline" onClick={() => setWaText(buildText(waUseSelected && selected.size > 0 ? filtered.filter((i) => selected.has(i.id)) : filtered))}>Terapkan ke pesan</Button>
               </div>
             </details>
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex flex-wrap justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setWaOpen(false)}>Batal</Button>
+              <Button variant="outline" onClick={sendPerSupplier} title="Buka chat WA terpisah ke nomor HP masing-masing supplier">
+                <Send className="h-4 w-4 mr-1.5" /> Kirim per Supplier
+              </Button>
               <Button className="bg-success text-success-foreground hover:bg-success/90" onClick={sendWhatsApp}>
-                <MessageCircle className="h-4 w-4 mr-1.5" /> Kirim
+                <MessageCircle className="h-4 w-4 mr-1.5" /> Kirim (1 pesan)
               </Button>
             </div>
           </div>
