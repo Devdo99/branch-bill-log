@@ -641,6 +641,29 @@ export default function ManagerInvoices() {
               <Input placeholder="cth: 628123456789" value={waPhone} onChange={(e) => setWaPhone(e.target.value)} />
               <div className="text-xs text-muted-foreground">Kosongkan untuk memilih kontak saat dialihkan ke WhatsApp.</div>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="flex items-center gap-1.5"><ListChecks className="h-3.5 w-3.5" /> Format pesan</Label>
+                <Select value={waMode} onValueChange={(v: any) => { setWaMode(v); setTimeout(() => setWaText(buildText(waUseSelected && selected.size > 0 ? filtered.filter((i) => selected.has(i.id)) : filtered)), 0); }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="rincian">Rincian (per item)</SelectItem>
+                    <SelectItem value="ringkasan">Ringkasan (per supplier)</SelectItem>
+                    <SelectItem value="gabungan">Gabungan (Ringkasan + Rincian)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Sumber data</Label>
+                <Select value={waUseSelected ? "sel" : "all"} onValueChange={(v) => { const sel = v === "sel"; setWaUseSelected(sel); setTimeout(() => setWaText(buildText(sel && selected.size > 0 ? filtered.filter((i) => selected.has(i.id)) : filtered)), 0); }}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Semua hasil filter ({filtered.length})</SelectItem>
+                    <SelectItem value="sel" disabled={selected.size === 0}>Hanya terpilih ({selected.size})</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label className="flex items-center gap-1.5"><Settings2 className="h-3.5 w-3.5" /> Isi pesan (bisa diedit)</Label>
@@ -648,38 +671,60 @@ export default function ManagerInvoices() {
                   setWaTemplate(DEFAULT_WA_TEMPLATE);
                   setWaGroupTpl(DEFAULT_GROUP_TEMPLATE);
                   setWaItemTpl(DEFAULT_ITEM_TEMPLATE);
-                  setTimeout(() => setWaText(buildText(filtered)), 0);
+                  setWaSumMain(DEFAULT_SUM_MAIN);
+                  setWaSumSup(DEFAULT_SUM_SUPPLIER);
+                  setWaSumLine(DEFAULT_SUM_LINE);
+                  setWaComboTpl(DEFAULT_COMBO_TEMPLATE);
+                  setTimeout(() => setWaText(buildText(waUseSelected && selected.size > 0 ? filtered.filter((i) => selected.has(i.id)) : filtered)), 0);
                 }}>
                   <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reset template
                 </Button>
               </div>
               <Textarea rows={12} value={waText} onChange={(e) => setWaText(e.target.value)} className="font-mono text-xs" />
-              <div className="text-xs text-muted-foreground">
-                Variabel template: <code>{"{cabang} {periode} {tanggal} {jumlah} {total} {sudah} {belum} {rincian} {rekening}"}</code>
-              </div>
             </div>
-            <details className="text-xs rounded-lg border bg-muted/30 p-3" open>
-              <summary className="cursor-pointer text-primary font-medium">Atur format rincian (per supplier & per item)</summary>
+            <details className="text-xs rounded-lg border bg-muted/30 p-3">
+              <summary className="cursor-pointer text-primary font-medium">Atur template format</summary>
               <div className="mt-3 space-y-3">
-                <div className="space-y-1">
-                  <Label className="text-xs">Format kelompok supplier</Label>
-                  <Textarea rows={3} value={waGroupTpl} onChange={(e) => setWaGroupTpl(e.target.value)} className="font-mono text-xs" />
-                  <div className="text-[11px] text-muted-foreground">
-                    Variabel: <code>{"{supplier} {jumlah} {subtotal} {items}"}</code>
+                {(waMode === "rincian" || waMode === "gabungan") && <>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Template utama — Rincian</Label>
+                    <Textarea rows={5} value={waTemplate} onChange={(e) => setWaTemplate(e.target.value)} className="font-mono text-xs" />
+                    <div className="text-[11px] text-muted-foreground"><code>{"{cabang} {periode} {jumlah} {total} {sudah} {belum} {rincian} {rekening}"}</code></div>
                   </div>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Format setiap item</Label>
-                  <Textarea rows={2} value={waItemTpl} onChange={(e) => setWaItemTpl(e.target.value)} className="font-mono text-xs" />
-                  <div className="text-[11px] text-muted-foreground">
-                    Variabel: <code>{"{no} {tanggal} {item} {qty} {harga} {total} {status}"}</code>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Kelompok supplier (rincian)</Label>
+                    <Textarea rows={3} value={waGroupTpl} onChange={(e) => setWaGroupTpl(e.target.value)} className="font-mono text-xs" />
+                    <div className="text-[11px] text-muted-foreground"><code>{"{supplier} {jumlah} {subtotal} {items}"}</code></div>
                   </div>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Template utama</Label>
-                  <Textarea rows={6} value={waTemplate} onChange={(e) => setWaTemplate(e.target.value)} className="font-mono text-xs" />
-                </div>
-                <Button size="sm" variant="outline" onClick={() => setWaText(buildText(filtered))}>Terapkan ke pesan</Button>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Setiap item (rincian)</Label>
+                    <Textarea rows={2} value={waItemTpl} onChange={(e) => setWaItemTpl(e.target.value)} className="font-mono text-xs" />
+                    <div className="text-[11px] text-muted-foreground"><code>{"{no} {tanggal} {item} {qty} {harga} {total} {status}"}</code></div>
+                  </div>
+                </>}
+                {(waMode === "ringkasan" || waMode === "gabungan") && <>
+                  {waMode === "ringkasan" && <div className="space-y-1">
+                    <Label className="text-xs">Template utama — Ringkasan</Label>
+                    <Textarea rows={5} value={waSumMain} onChange={(e) => setWaSumMain(e.target.value)} className="font-mono text-xs" />
+                    <div className="text-[11px] text-muted-foreground"><code>{"{cabang} {periode} {total} {ringkasan}"}</code></div>
+                  </div>}
+                  {waMode === "gabungan" && <div className="space-y-1">
+                    <Label className="text-xs">Template utama — Gabungan</Label>
+                    <Textarea rows={6} value={waComboTpl} onChange={(e) => setWaComboTpl(e.target.value)} className="font-mono text-xs" />
+                    <div className="text-[11px] text-muted-foreground"><code>{"{cabang} {periode} {total} {ringkasan} {rincian}"}</code></div>
+                  </div>}
+                  <div className="space-y-1">
+                    <Label className="text-xs">Blok supplier (ringkasan)</Label>
+                    <Textarea rows={3} value={waSumSup} onChange={(e) => setWaSumSup(e.target.value)} className="font-mono text-xs" />
+                    <div className="text-[11px] text-muted-foreground"><code>{"{supplier} {lines} {subtotal} {rekening} {jumlah}"}</code></div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Baris per tanggal (ringkasan)</Label>
+                    <Textarea rows={2} value={waSumLine} onChange={(e) => setWaSumLine(e.target.value)} className="font-mono text-xs" />
+                    <div className="text-[11px] text-muted-foreground"><code>{"{tanggal} {nominal} {rekening} {status}"}</code></div>
+                  </div>
+                </>}
+                <Button size="sm" variant="outline" onClick={() => setWaText(buildText(waUseSelected && selected.size > 0 ? filtered.filter((i) => selected.has(i.id)) : filtered))}>Terapkan ke pesan</Button>
               </div>
             </details>
             <div className="flex justify-end gap-2 pt-2">
