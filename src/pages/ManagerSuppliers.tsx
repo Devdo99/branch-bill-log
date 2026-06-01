@@ -13,9 +13,10 @@ import { Trash2, Plus, Pencil, Save, X, Download, Upload, FileSpreadsheet } from
 interface Supplier {
   id: string; name: string; note: string | null;
   bank_name: string | null; bank_account: string | null; account_holder: string | null;
+  phone: string | null;
 }
 
-const CSV_HEADERS = ["name", "note", "bank_name", "bank_account", "account_holder"];
+const CSV_HEADERS = ["name", "phone", "note", "bank_name", "bank_account", "account_holder"];
 const csvEscape = (v: string) => {
   const s = v ?? "";
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -61,12 +62,14 @@ export default function ManagerSuppliers() {
   const [bankName, setBankName] = useState("");
   const [bankAccount, setBankAccount] = useState("");
   const [accountHolder, setAccountHolder] = useState("");
+  const [phone, setPhone] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editNote, setEditNote] = useState("");
   const [editBankName, setEditBankName] = useState("");
   const [editBankAccount, setEditBankAccount] = useState("");
   const [editAccountHolder, setEditAccountHolder] = useState("");
+  const [editPhone, setEditPhone] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
 
@@ -74,7 +77,7 @@ export default function ManagerSuppliers() {
     if (!activeBranch) return;
     setLoading(true);
     const { data, error } = await supabase.from("suppliers")
-      .select("id, name, note, bank_name, bank_account, account_holder")
+      .select("id, name, note, bank_name, bank_account, account_holder, phone")
       .eq("branch_id", activeBranch.id).order("name");
     if (error) toast.error(error.message);
     setList((data ?? []) as Supplier[]);
@@ -92,15 +95,17 @@ export default function ManagerSuppliers() {
       bank_name: bankName.trim() || null,
       bank_account: bankAccount.trim() || null,
       account_holder: accountHolder.trim() || null,
+      phone: phone.trim() || null,
     });
     if (error) return toast.error(error.message);
     toast.success("Supplier ditambahkan");
-    setName(""); setNote(""); setBankName(""); setBankAccount(""); setAccountHolder(""); load();
+    setName(""); setNote(""); setBankName(""); setBankAccount(""); setAccountHolder(""); setPhone(""); load();
   };
 
   const startEdit = (s: Supplier) => {
     setEditId(s.id); setEditName(s.name); setEditNote(s.note ?? "");
     setEditBankName(s.bank_name ?? ""); setEditBankAccount(s.bank_account ?? ""); setEditAccountHolder(s.account_holder ?? "");
+    setEditPhone(s.phone ?? "");
   };
   const saveEdit = async () => {
     if (!editId) return;
@@ -110,6 +115,7 @@ export default function ManagerSuppliers() {
         bank_name: editBankName.trim() || null,
         bank_account: editBankAccount.trim() || null,
         account_holder: editAccountHolder.trim() || null,
+        phone: editPhone.trim() || null,
       }).eq("id", editId);
     if (error) return toast.error(error.message);
     toast.success("Tersimpan"); setEditId(null); load();
@@ -122,12 +128,14 @@ export default function ManagerSuppliers() {
   };
 
   const exportCsv = () => {
-    const rows = [CSV_HEADERS, ...list.map(s => [s.name, s.note ?? "", s.bank_name ?? "", s.bank_account ?? "", s.account_holder ?? ""])];
+    const rows = [CSV_HEADERS, ...list.map(s => [s.name, s.phone ?? "", s.note ?? "", s.bank_name ?? "", s.bank_account ?? "", s.account_holder ?? ""])];
     downloadFile(buildCsv(rows), `suppliers-${activeBranch?.name ?? "branch"}-${new Date().toISOString().slice(0, 10)}.csv`);
     toast.success(`${list.length} supplier diekspor`);
   };
   const downloadTemplate = () => {
-    const rows = [CSV_HEADERS, ["PT Sumber Pangan", "Pemasok sayur", "BCA", "1234567890", "Budi Santoso"], ["UD Maju Jaya", "", "BRI", "987654321", "Ani"]];
+    const rows = [CSV_HEADERS,
+      ["PT Sumber Pangan", "628123456789", "Pemasok sayur", "BCA", "1234567890", "Budi Santoso"],
+      ["UD Maju Jaya", "628987654321", "", "BRI", "987654321", "Ani"]];
     downloadFile(buildCsv(rows), "template-supplier.csv");
   };
   const onPickFile = () => fileRef.current?.click();
@@ -150,6 +158,7 @@ export default function ManagerSuppliers() {
         if (!name) { skipped++; continue; }
         const payload = {
           name,
+          phone: (idx("phone") >= 0 ? row[idx("phone")]?.trim() : "") || null,
           note: (idx("note") >= 0 ? row[idx("note")]?.trim() : "") || null,
           bank_name: (idx("bank_name") >= 0 ? row[idx("bank_name")]?.trim() : "") || null,
           bank_account: (idx("bank_account") >= 0 ? row[idx("bank_account")]?.trim() : "") || null,
@@ -177,6 +186,7 @@ export default function ManagerSuppliers() {
         <form onSubmit={add} className="bg-card border rounded-xl shadow-card p-5 space-y-3">
           <h3 className="font-display font-bold">Tambah Supplier</h3>
           <div className="space-y-1.5"><Label>Nama Supplier *</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="PT Sumber Pangan" required /></div>
+          <div className="space-y-1.5"><Label>No. HP / WhatsApp</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="cth: 628123456789" /></div>
           <div className="space-y-1.5"><Label>Catatan (opsional)</Label><Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="No telp, alamat, jenis barang…" rows={3} /></div>
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1.5"><Label>Bank</Label><Input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="BCA / BRI / Mandiri" /></div>
@@ -203,6 +213,7 @@ export default function ManagerSuppliers() {
                   {editId === s.id ? (
                     <div className="flex-1 space-y-2">
                       <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+                      <Input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="No. HP / WhatsApp" />
                       <Textarea value={editNote} onChange={(e) => setEditNote(e.target.value)} rows={2} />
                       <div className="grid grid-cols-2 gap-2">
                         <Input value={editBankName} onChange={(e) => setEditBankName(e.target.value)} placeholder="Bank" />
@@ -218,6 +229,7 @@ export default function ManagerSuppliers() {
                     <>
                       <div className="flex-1 min-w-0">
                         <div className="font-semibold">{s.name}</div>
+                        {s.phone && <div className="text-xs text-muted-foreground">📱 {s.phone}</div>}
                         {s.note && <div className="text-sm text-muted-foreground whitespace-pre-wrap">{s.note}</div>}
                         {(s.bank_name || s.bank_account || s.account_holder) && (
                           <div className="mt-1 text-xs text-foreground/80 bg-muted/60 rounded px-2 py-1 inline-block">
