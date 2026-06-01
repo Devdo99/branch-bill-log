@@ -11,7 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { Search, FileDown, Image as ImgIcon, MessageCircle, Eye, ZoomIn, ZoomOut, RotateCw, Pencil, Trash2, Filter, Receipt, Wallet, CheckCircle2, Clock, Settings2, RotateCcw, Archive, ListChecks } from "lucide-react";
+import { Search, FileDown, Image as ImgIcon, MessageCircle, Eye, ZoomIn, ZoomOut, RotateCw, Pencil, Trash2, Filter, Receipt, Wallet, CheckCircle2, Clock, Settings2, RotateCcw, Archive, ListChecks, Send } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -85,7 +85,7 @@ export default function ManagerInvoices() {
   const [itemQuery, setItemQuery] = useState("");
   const [supplierFilter, setSupplierFilter] = useState<string>("all");
   const [supplierOptions, setSupplierOptions] = useState<string[]>([]);
-  const [supplierBank, setSupplierBank] = useState<Record<string, { bank_name: string | null; bank_account: string | null; account_holder: string | null }>>({});
+  const [supplierBank, setSupplierBank] = useState<Record<string, { bank_name: string | null; bank_account: string | null; account_holder: string | null; phone: string | null }>>({});
   const [status, setStatus] = useState<"all" | "BELUM" | "SUDAH">("all");
   const [from, setFrom] = useState(() => {
     const n = new Date();
@@ -136,13 +136,13 @@ export default function ManagerInvoices() {
 
   useEffect(() => {
     if (!activeBranch) return;
-    supabase.from("suppliers").select("name, bank_name, bank_account, account_holder")
+    supabase.from("suppliers").select("name, bank_name, bank_account, account_holder, phone")
       .eq("branch_id", activeBranch.id).order("name")
       .then(({ data }) => {
         const list = (data ?? []) as any[];
         setSupplierOptions(list.map((s) => s.name));
         const map: Record<string, any> = {};
-        list.forEach((s) => { map[s.name] = { bank_name: s.bank_name, bank_account: s.bank_account, account_holder: s.account_holder }; });
+        list.forEach((s) => { map[s.name] = { bank_name: s.bank_name, bank_account: s.bank_account, account_holder: s.account_holder, phone: s.phone }; });
         setSupplierBank(map);
       });
   }, [activeBranch?.id]);
@@ -357,6 +357,53 @@ export default function ManagerInvoices() {
   };
 
   const sanitize = (s: string) => s.replace(/[\\/:*?"<>|]+/g, "_").slice(0, 80);
+
+  const buildSupplierMessage = (supplierName: string, items: Inv[]) => {
+    const b = supplierBank[supplierName];
+    const rek = !b || (!b.bank_name && !b.bank_account)
+      ? "(belum ada rekening)"
+      : `${b.bank_name ?? "-"} ${b.bank_account ?? "-"}${b.account_holder ? ` a.n. ${b.account_holder}` : ""}`;
+    const lines = items.map((i) => waSumLine
+      .split("{tanggal}").join(formatDate(i.invoice_date))
+      .split("{nominal}").join(formatRupiah(Number(i.total)))
+      .split("{rekening}").join(rek)
+      .split("{status}").join(i.status)
+    ).join("\n");
+    const subtotal = items.reduce((s, x) => s + Number(x.total), 0);
+    const blok = waSumSup
+      .split("{supplier}").join(supplierName)
+      .split("{lines}").join(lines)
+      .split("{subtotal}").join(formatRupiah(subtotal))
+      .split("{rekening}").join(rek)
+      .split("{jumlah}").join(String(items.length));
+    return `*Tagihan ${activeBranch?.name ?? ""}*\n\n${blok}\n\nMohon konfirmasi pembayarannya, terima kasih.`;
+  };
+
+  const sendPerSupplier = () => {
+    const rows = (waUseSelected && selected.size > 0 ? filtered.filter((i) => selected.has(i.id)) : filtered);
+    if (rows.length === 0) return toast.error("Tidak ada nota");
+    const groups = new Map<string, Inv[]>();
+    rows.forEach((r) => { const a = groups.get(r.supplier) ?? []; a.push(r); groups.set(r.supplier, a); });
+    const targets: { name: string; phone: string; items: Inv[] }[] = [];
+    const missing: string[] = [];
+    groups.forEach((items, name) => {
+      const p = (supplierBank[name]?.phone ?? "").replace(/\D/g, "");
+      if (!p) missing.push(name); else targets.push({ name, phone: p, items });
+    });
+    if (targets.length === 0) {
+      return toast.error(`Tidak ada nomor HP supplier${missing.length ? ` (${missing.join(", ")})` : ""}`);
+    }
+    if (missing.length) toast.warning(`Dilewati (tanpa no. HP): ${missing.join(", ")}`);
+    targets.forEach((t, idx) => {
+      const text = buildSupplierMessage(t.name, t.items);
+      const url = `https://wa.me/${t.phone}?text=${encodeURIComponent(text)}`;
+      // sedikit jeda agar browser tidak blokir tab popup beruntun
+      setTimeout(() => window.open(url, "_blank"), idx * 350);
+    });
+    toast.success(`Membuka ${targets.length} chat WhatsApp`);
+    setWaOpen(false);
+  };
+
   const downloadSelectedPhotos = async () => {
     const rows = (selected.size > 0 ? filtered.filter((i) => selected.has(i.id)) : filtered).filter((i) => i.photo_path);
     if (rows.length === 0) return toast.error("Tidak ada foto pada nota terpilih");
