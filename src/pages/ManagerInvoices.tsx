@@ -401,20 +401,26 @@ export default function ManagerInvoices() {
     const rek = !b || (!b.bank_name && !b.bank_account)
       ? "(belum ada rekening)"
       : `${b.bank_name ?? "-"} ${b.bank_account ?? "-"}${b.account_holder ? ` a.n. ${b.account_holder}` : ""}`;
-    const lines = items.map((i) => waSumLine
+    const lines = items.map((i, idx) => waSupLine
+      .split("{no}").join(String(idx + 1))
       .split("{tanggal}").join(formatDate(i.invoice_date))
+      .split("{item}").join(i.item_name)
+      .split("{qty}").join(String(i.qty))
+      .split("{harga}").join(formatRupiah(Number(i.price)))
       .split("{nominal}").join(formatRupiah(Number(i.total)))
-      .split("{rekening}").join(rek)
       .split("{status}").join(i.status)
     ).join("\n");
     const subtotal = items.reduce((s, x) => s + Number(x.total), 0);
-    const blok = waSumSup
+    const periode = from || to ? `${from || "-"} s/d ${to || "-"}` : "Semua periode";
+    return waSupMain
+      .split("{cabang}").join(activeBranch?.name ?? "-")
       .split("{supplier}").join(supplierName)
-      .split("{lines}").join(lines)
+      .split("{periode}").join(periode)
+      .split("{jumlah}").join(String(items.length))
       .split("{subtotal}").join(formatRupiah(subtotal))
       .split("{rekening}").join(rek)
-      .split("{jumlah}").join(String(items.length));
-    return `*Tagihan ${activeBranch?.name ?? ""}*\n\n${blok}\n\nMohon konfirmasi pembayarannya, terima kasih.`;
+      .split("{lines}").join(lines)
+      .split("{tanggal}").join(new Date().toLocaleDateString("id-ID"));
   };
 
   const sendPerSupplier = () => {
