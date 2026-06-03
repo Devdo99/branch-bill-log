@@ -386,6 +386,9 @@ export default function ManagerInvoices() {
     localStorage.setItem("wa_sum_sup", waSumSup);
     localStorage.setItem("wa_sum_line", waSumLine);
     localStorage.setItem("wa_combo", waComboTpl);
+    localStorage.setItem("wa_totals_line", waTotalsLine);
+    localStorage.setItem("wa_sup_main", waSupMain);
+    localStorage.setItem("wa_sup_line", waSupLine);
     const phone = waPhone.replace(/\D/g, "");
     const url = phone
       ? `https://wa.me/${phone}?text=${encodeURIComponent(waText)}`
