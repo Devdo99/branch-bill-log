@@ -68,7 +68,28 @@ Periode: {periode}
 — RINCIAN —
 {rincian}
 
+— TOTAL PER SUPPLIER —
+{total_per_supplier}
+
 Total: *{total}*`;
+
+// Baris total per supplier untuk laporan general (variabel: {supplier} {jumlah} {subtotal})
+const DEFAULT_TOTALS_LINE = `• {supplier}: *{subtotal}* ({jumlah} nota)`;
+
+// === Template terpisah untuk pesan ke MASING-MASING SUPPLIER ===
+// Variabel utama: {cabang} {supplier} {tanggal} {periode} {jumlah} {subtotal} {rekening} {lines}
+const DEFAULT_SUP_MAIN = `Halo *{supplier}*,
+Berikut rincian tagihan dari *{cabang}* (periode {periode}):
+
+{lines}
+
+Total: *{subtotal}*
+Transfer ke: {rekening}
+
+Mohon konfirmasi pembayarannya. Terima kasih 🙏`;
+
+// Baris per nota di pesan supplier (variabel: {no} {tanggal} {item} {qty} {harga} {nominal} {status})
+const DEFAULT_SUP_LINE = `{no}. {tanggal} — {item} — *{nominal}*`;
 
 interface Inv {
   id: string; invoice_date: string; supplier: string; item_name: string;
@@ -119,6 +140,9 @@ export default function ManagerInvoices() {
   const [waSumSup, setWaSumSup] = useState<string>(() => localStorage.getItem("wa_sum_sup") ?? DEFAULT_SUM_SUPPLIER);
   const [waSumLine, setWaSumLine] = useState<string>(() => localStorage.getItem("wa_sum_line") ?? DEFAULT_SUM_LINE);
   const [waComboTpl, setWaComboTpl] = useState<string>(() => localStorage.getItem("wa_combo") ?? DEFAULT_COMBO_TEMPLATE);
+  const [waTotalsLine, setWaTotalsLine] = useState<string>(() => localStorage.getItem("wa_totals_line") ?? DEFAULT_TOTALS_LINE);
+  const [waSupMain, setWaSupMain] = useState<string>(() => localStorage.getItem("wa_sup_main") ?? DEFAULT_SUP_MAIN);
+  const [waSupLine, setWaSupLine] = useState<string>(() => localStorage.getItem("wa_sup_line") ?? DEFAULT_SUP_LINE);
   const [waText, setWaText] = useState<string>("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [downloading, setDownloading] = useState(false);
