@@ -821,6 +821,27 @@ export default function ManagerInvoices() {
                     <div className="text-[11px] text-muted-foreground"><code>{"{tanggal} {nominal} {rekening} {status}"}</code></div>
                   </div>
                 </>}
+                <div className="space-y-1 pt-2 border-t">
+                  <Label className="text-xs">Baris total per supplier (laporan general)</Label>
+                  <Textarea rows={2} value={waTotalsLine} onChange={(e) => setWaTotalsLine(e.target.value)} className="font-mono text-xs" />
+                  <div className="text-[11px] text-muted-foreground">
+                    Tersedia variabel <code>{"{total_per_supplier}"}</code> pada template utama (Gabungan default sudah memuatnya).<br/>
+                    Variabel baris: <code>{"{supplier} {jumlah} {subtotal}"}</code>
+                  </div>
+                </div>
+                <div className="space-y-2 pt-2 border-t">
+                  <Label className="text-xs font-semibold">Template pesan ke Supplier (Kirim per Supplier)</Label>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Template utama</Label>
+                    <Textarea rows={7} value={waSupMain} onChange={(e) => setWaSupMain(e.target.value)} className="font-mono text-xs" />
+                    <div className="text-[11px] text-muted-foreground"><code>{"{cabang} {supplier} {periode} {jumlah} {subtotal} {rekening} {lines} {tanggal}"}</code></div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Baris per nota</Label>
+                    <Textarea rows={2} value={waSupLine} onChange={(e) => setWaSupLine(e.target.value)} className="font-mono text-xs" />
+                    <div className="text-[11px] text-muted-foreground"><code>{"{no} {tanggal} {item} {qty} {harga} {nominal} {status}"}</code></div>
+                  </div>
+                </div>
                 <Button size="sm" variant="outline" onClick={() => setWaText(buildText(waUseSelected && selected.size > 0 ? filtered.filter((i) => selected.has(i.id)) : filtered))}>Terapkan ke pesan</Button>
               </div>
             </details>
