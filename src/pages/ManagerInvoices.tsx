@@ -335,6 +335,19 @@ export default function ManagerInvoices() {
         }).join("\n");
     const periode = from || to ? `${from || "-"} s/d ${to || "-"}` : "Semua periode";
     const today = new Date().toLocaleDateString("id-ID");
+    // Total per supplier
+    const totalsMap = new Map<string, { jumlah: number; subtotal: number }>();
+    rows.forEach((r) => {
+      const cur = totalsMap.get(r.supplier) ?? { jumlah: 0, subtotal: 0 };
+      cur.jumlah += 1; cur.subtotal += Number(r.total);
+      totalsMap.set(r.supplier, cur);
+    });
+    const totalPerSupplier = Array.from(totalsMap.entries())
+      .map(([name, v]) => waTotalsLine
+        .split("{supplier}").join(name)
+        .split("{jumlah}").join(String(v.jumlah))
+        .split("{subtotal}").join(formatRupiah(v.subtotal))
+      ).join("\n") || "(tidak ada)";
     const tplVars = (s: string) => s
       .split("{cabang}").join(activeBranch?.name ?? "-")
       .split("{periode}").join(periode)
@@ -343,7 +356,8 @@ export default function ManagerInvoices() {
       .split("{sudah}").join(formatRupiah(paid))
       .split("{belum}").join(formatRupiah(unpaid))
       .split("{tanggal}").join(today)
-      .split("{rekening}").join(rekening);
+      .split("{rekening}").join(rekening)
+      .split("{total_per_supplier}").join(totalPerSupplier);
     const rincian = buildRincian(rows) || "(tidak ada nota)";
     const ringkasan = buildRingkasan(rows) || "(tidak ada nota)";
     if (waMode === "ringkasan") {
