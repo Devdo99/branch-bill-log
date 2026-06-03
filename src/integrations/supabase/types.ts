@@ -49,6 +49,59 @@ export type Database = {
           },
         ]
       }
+      admin_permissions: {
+        Row: {
+          branch_id: string
+          created_at: string
+          created_by: string
+          id: string
+          manage_cashiers: boolean
+          manage_invoices: boolean
+          manage_revenues: boolean
+          manage_suppliers: boolean
+          mark_paid: boolean
+          updated_at: string
+          user_id: string
+          view_reports: boolean
+        }
+        Insert: {
+          branch_id: string
+          created_at?: string
+          created_by: string
+          id?: string
+          manage_cashiers?: boolean
+          manage_invoices?: boolean
+          manage_revenues?: boolean
+          manage_suppliers?: boolean
+          mark_paid?: boolean
+          updated_at?: string
+          user_id: string
+          view_reports?: boolean
+        }
+        Update: {
+          branch_id?: string
+          created_at?: string
+          created_by?: string
+          id?: string
+          manage_cashiers?: boolean
+          manage_invoices?: boolean
+          manage_revenues?: boolean
+          manage_suppliers?: boolean
+          mark_paid?: boolean
+          updated_at?: string
+          user_id?: string
+          view_reports?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_permissions_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       branch_users: {
         Row: {
           branch_id: string
@@ -302,6 +355,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_has_permission: {
+        Args: { _branch_id: string; _perm: string; _user_id: string }
+        Returns: boolean
+      }
       get_cashier_branch: { Args: { _user_id: string }; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
@@ -314,6 +371,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_branch_admin: {
+        Args: { _branch_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_branch_cashier: {
         Args: { _branch_id: string; _user_id: string }
         Returns: boolean
@@ -324,7 +385,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "manager" | "kasir"
+      app_role: "manager" | "kasir" | "admin"
       invoice_status: "BELUM" | "SUDAH"
     }
     CompositeTypes: {
@@ -453,7 +514,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["manager", "kasir"],
+      app_role: ["manager", "kasir", "admin"],
       invoice_status: ["BELUM", "SUDAH"],
     },
   },

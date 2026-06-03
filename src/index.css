@@ -8,47 +8,49 @@ All colors MUST be HSL.
 
 @layer base {
   :root {
-    /* Brand: hitam, putih, hijau */
-    --background: 0 0% 99%;
-    --foreground: 0 0% 8%;
+    /* Soft Neo-Brutalist: cream kuning + ink + aksen hijau */
+    --background: 54 96% 86%;
+    --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 8%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 8%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 152 72% 28%;
+    --primary: 142 71% 36%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 152 72% 38%;
+    --primary-glow: 142 71% 45%;
 
-    --secondary: 0 0% 12%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 222 47% 11%;
+    --secondary-foreground: 54 96% 86%;
 
-    --muted: 0 0% 96%;
-    --muted-foreground: 0 0% 38%;
+    --muted: 54 70% 92%;
+    --muted-foreground: 222 20% 35%;
 
-    --accent: 152 60% 94%;
-    --accent-foreground: 152 72% 22%;
+    --accent: 54 96% 78%;
+    --accent-foreground: 222 47% 11%;
 
-    --success: 152 72% 32%;
+    --success: 142 71% 36%;
     --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
-    --warning-foreground: 0 0% 8%;
+    --warning: 32 96% 50%;
+    --warning-foreground: 222 47% 11%;
 
-    --destructive: 0 72% 48%;
+    --destructive: 0 78% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 90%;
-    --input: 0 0% 92%;
-    --ring: 152 72% 28%;
+    --border: 222 47% 11%;
+    --input: 222 47% 11%;
+    --ring: 142 71% 36%;
 
-    --radius: 0.75rem;
+    --radius: 0.6rem;
 
-    --gradient-primary: linear-gradient(135deg, hsl(152 72% 22%), hsl(152 72% 38%));
-    --gradient-dark: linear-gradient(160deg, hsl(0 0% 8%), hsl(0 0% 14%));
-    --shadow-elegant: 0 10px 30px -12px hsl(152 72% 28% / 0.25);
-    --shadow-card: 0 1px 2px hsl(0 0% 0% / 0.04), 0 4px 16px -4px hsl(0 0% 0% / 0.06);
+    --gradient-primary: linear-gradient(135deg, hsl(142 71% 32%), hsl(142 71% 45%));
+    --gradient-dark: linear-gradient(160deg, hsl(222 47% 11%), hsl(222 47% 16%));
+    --shadow-elegant: 6px 6px 0 0 hsl(var(--foreground));
+    --shadow-card: 4px 4px 0 0 hsl(var(--foreground));
+    --shadow-brutal-sm: 3px 3px 0 0 hsl(var(--foreground));
+    --shadow-brutal-lg: 8px 8px 0 0 hsl(var(--foreground));
 
     --sidebar-background: 0 0% 98%;
 
@@ -113,5 +115,24 @@ All colors MUST be HSL.
 
   body {
     @apply bg-background text-foreground;
+    background-image:
+      radial-gradient(hsl(var(--foreground) / 0.06) 1px, transparent 1px);
+    background-size: 22px 22px;
+  }
+}
+
+@layer components {
+  .brutal-card {
+    @apply bg-card border-2 border-foreground rounded-[var(--radius)] shadow-card;
+  }
+  .brutal-card-sm {
+    @apply bg-card border-2 border-foreground rounded-[var(--radius)];
+    box-shadow: var(--shadow-brutal-sm);
+  }
+  .brutal-input {
+    @apply border-2 border-foreground bg-card rounded-md;
+  }
+  .brutal-chip {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border-2 border-foreground bg-card text-xs font-semibold;
   }
 }
