@@ -769,6 +769,9 @@ export default function ManagerInvoices() {
                   setWaSumSup(DEFAULT_SUM_SUPPLIER);
                   setWaSumLine(DEFAULT_SUM_LINE);
                   setWaComboTpl(DEFAULT_COMBO_TEMPLATE);
+                  setWaTotalsLine(DEFAULT_TOTALS_LINE);
+                  setWaSupMain(DEFAULT_SUP_MAIN);
+                  setWaSupLine(DEFAULT_SUP_LINE);
                   setTimeout(() => setWaText(buildText(waUseSelected && selected.size > 0 ? filtered.filter((i) => selected.has(i.id)) : filtered)), 0);
                 }}>
                   <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reset template
