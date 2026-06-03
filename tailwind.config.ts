@@ -79,10 +79,14 @@ export default {
       boxShadow: {
         elegant: "var(--shadow-elegant)",
         card: "var(--shadow-card)",
+        brutal: "var(--shadow-card)",
+        "brutal-sm": "var(--shadow-brutal-sm)",
+        "brutal-lg": "var(--shadow-brutal-lg)",
       },
       fontFamily: {
-        display: ["'Plus Jakarta Sans'", "system-ui", "sans-serif"],
-        sans: ["'Inter'", "system-ui", "sans-serif"],
+        display: ["'Space Grotesk'", "'Plus Jakarta Sans'", "system-ui", "sans-serif"],
+        sans: ["'DM Sans'", "'Inter'", "system-ui", "sans-serif"],
+        mono: ["'JetBrains Mono'", "ui-monospace", "monospace"],
       },
       keyframes: {
         "accordion-down": {
