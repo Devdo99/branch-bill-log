@@ -427,6 +427,9 @@ export default function ManagerInvoices() {
   };
 
   const sendPerSupplier = () => {
+    localStorage.setItem("wa_sup_main", waSupMain);
+    localStorage.setItem("wa_sup_line", waSupLine);
+    localStorage.setItem("wa_sum_line", waSumLine);
     const rows = (waUseSelected && selected.size > 0 ? filtered.filter((i) => selected.has(i.id)) : filtered);
     if (rows.length === 0) return toast.error("Tidak ada nota");
     const groups = new Map<string, Inv[]>();
