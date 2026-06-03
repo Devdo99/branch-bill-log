@@ -68,7 +68,28 @@ Periode: {periode}
 — RINCIAN —
 {rincian}
 
+— TOTAL PER SUPPLIER —
+{total_per_supplier}
+
 Total: *{total}*`;
+
+// Baris total per supplier untuk laporan general (variabel: {supplier} {jumlah} {subtotal})
+const DEFAULT_TOTALS_LINE = `• {supplier}: *{subtotal}* ({jumlah} nota)`;
+
+// === Template terpisah untuk pesan ke MASING-MASING SUPPLIER ===
+// Variabel utama: {cabang} {supplier} {tanggal} {periode} {jumlah} {subtotal} {rekening} {lines}
+const DEFAULT_SUP_MAIN = `Halo *{supplier}*,
+Berikut rincian tagihan dari *{cabang}* (periode {periode}):
+
+{lines}
+
+Total: *{subtotal}*
+Transfer ke: {rekening}
+
+Mohon konfirmasi pembayarannya. Terima kasih 🙏`;
+
+// Baris per nota di pesan supplier (variabel: {no} {tanggal} {item} {qty} {harga} {nominal} {status})
+const DEFAULT_SUP_LINE = `{no}. {tanggal} — {item} — *{nominal}*`;
 
 interface Inv {
   id: string; invoice_date: string; supplier: string; item_name: string;
@@ -119,6 +140,9 @@ export default function ManagerInvoices() {
   const [waSumSup, setWaSumSup] = useState<string>(() => localStorage.getItem("wa_sum_sup") ?? DEFAULT_SUM_SUPPLIER);
   const [waSumLine, setWaSumLine] = useState<string>(() => localStorage.getItem("wa_sum_line") ?? DEFAULT_SUM_LINE);
   const [waComboTpl, setWaComboTpl] = useState<string>(() => localStorage.getItem("wa_combo") ?? DEFAULT_COMBO_TEMPLATE);
+  const [waTotalsLine, setWaTotalsLine] = useState<string>(() => localStorage.getItem("wa_totals_line") ?? DEFAULT_TOTALS_LINE);
+  const [waSupMain, setWaSupMain] = useState<string>(() => localStorage.getItem("wa_sup_main") ?? DEFAULT_SUP_MAIN);
+  const [waSupLine, setWaSupLine] = useState<string>(() => localStorage.getItem("wa_sup_line") ?? DEFAULT_SUP_LINE);
   const [waText, setWaText] = useState<string>("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [downloading, setDownloading] = useState(false);
@@ -311,6 +335,19 @@ export default function ManagerInvoices() {
         }).join("\n");
     const periode = from || to ? `${from || "-"} s/d ${to || "-"}` : "Semua periode";
     const today = new Date().toLocaleDateString("id-ID");
+    // Total per supplier
+    const totalsMap = new Map<string, { jumlah: number; subtotal: number }>();
+    rows.forEach((r) => {
+      const cur = totalsMap.get(r.supplier) ?? { jumlah: 0, subtotal: 0 };
+      cur.jumlah += 1; cur.subtotal += Number(r.total);
+      totalsMap.set(r.supplier, cur);
+    });
+    const totalPerSupplier = Array.from(totalsMap.entries())
+      .map(([name, v]) => waTotalsLine
+        .split("{supplier}").join(name)
+        .split("{jumlah}").join(String(v.jumlah))
+        .split("{subtotal}").join(formatRupiah(v.subtotal))
+      ).join("\n") || "(tidak ada)";
     const tplVars = (s: string) => s
       .split("{cabang}").join(activeBranch?.name ?? "-")
       .split("{periode}").join(periode)
@@ -319,7 +356,8 @@ export default function ManagerInvoices() {
       .split("{sudah}").join(formatRupiah(paid))
       .split("{belum}").join(formatRupiah(unpaid))
       .split("{tanggal}").join(today)
-      .split("{rekening}").join(rekening);
+      .split("{rekening}").join(rekening)
+      .split("{total_per_supplier}").join(totalPerSupplier);
     const rincian = buildRincian(rows) || "(tidak ada nota)";
     const ringkasan = buildRingkasan(rows) || "(tidak ada nota)";
     if (waMode === "ringkasan") {
@@ -348,6 +386,9 @@ export default function ManagerInvoices() {
     localStorage.setItem("wa_sum_sup", waSumSup);
     localStorage.setItem("wa_sum_line", waSumLine);
     localStorage.setItem("wa_combo", waComboTpl);
+    localStorage.setItem("wa_totals_line", waTotalsLine);
+    localStorage.setItem("wa_sup_main", waSupMain);
+    localStorage.setItem("wa_sup_line", waSupLine);
     const phone = waPhone.replace(/\D/g, "");
     const url = phone
       ? `https://wa.me/${phone}?text=${encodeURIComponent(waText)}`
@@ -363,23 +404,32 @@ export default function ManagerInvoices() {
     const rek = !b || (!b.bank_name && !b.bank_account)
       ? "(belum ada rekening)"
       : `${b.bank_name ?? "-"} ${b.bank_account ?? "-"}${b.account_holder ? ` a.n. ${b.account_holder}` : ""}`;
-    const lines = items.map((i) => waSumLine
+    const lines = items.map((i, idx) => waSupLine
+      .split("{no}").join(String(idx + 1))
       .split("{tanggal}").join(formatDate(i.invoice_date))
+      .split("{item}").join(i.item_name)
+      .split("{qty}").join(String(i.qty))
+      .split("{harga}").join(formatRupiah(Number(i.price)))
       .split("{nominal}").join(formatRupiah(Number(i.total)))
-      .split("{rekening}").join(rek)
       .split("{status}").join(i.status)
     ).join("\n");
     const subtotal = items.reduce((s, x) => s + Number(x.total), 0);
-    const blok = waSumSup
+    const periode = from || to ? `${from || "-"} s/d ${to || "-"}` : "Semua periode";
+    return waSupMain
+      .split("{cabang}").join(activeBranch?.name ?? "-")
       .split("{supplier}").join(supplierName)
-      .split("{lines}").join(lines)
+      .split("{periode}").join(periode)
+      .split("{jumlah}").join(String(items.length))
       .split("{subtotal}").join(formatRupiah(subtotal))
       .split("{rekening}").join(rek)
-      .split("{jumlah}").join(String(items.length));
-    return `*Tagihan ${activeBranch?.name ?? ""}*\n\n${blok}\n\nMohon konfirmasi pembayarannya, terima kasih.`;
+      .split("{lines}").join(lines)
+      .split("{tanggal}").join(new Date().toLocaleDateString("id-ID"));
   };
 
   const sendPerSupplier = () => {
+    localStorage.setItem("wa_sup_main", waSupMain);
+    localStorage.setItem("wa_sup_line", waSupLine);
+    localStorage.setItem("wa_sum_line", waSumLine);
     const rows = (waUseSelected && selected.size > 0 ? filtered.filter((i) => selected.has(i.id)) : filtered);
     if (rows.length === 0) return toast.error("Tidak ada nota");
     const groups = new Map<string, Inv[]>();
@@ -722,6 +772,9 @@ export default function ManagerInvoices() {
                   setWaSumSup(DEFAULT_SUM_SUPPLIER);
                   setWaSumLine(DEFAULT_SUM_LINE);
                   setWaComboTpl(DEFAULT_COMBO_TEMPLATE);
+                  setWaTotalsLine(DEFAULT_TOTALS_LINE);
+                  setWaSupMain(DEFAULT_SUP_MAIN);
+                  setWaSupLine(DEFAULT_SUP_LINE);
                   setTimeout(() => setWaText(buildText(waUseSelected && selected.size > 0 ? filtered.filter((i) => selected.has(i.id)) : filtered)), 0);
                 }}>
                   <RotateCcw className="h-3.5 w-3.5 mr-1" /> Reset template
@@ -771,6 +824,27 @@ export default function ManagerInvoices() {
                     <div className="text-[11px] text-muted-foreground"><code>{"{tanggal} {nominal} {rekening} {status}"}</code></div>
                   </div>
                 </>}
+                <div className="space-y-1 pt-2 border-t">
+                  <Label className="text-xs">Baris total per supplier (laporan general)</Label>
+                  <Textarea rows={2} value={waTotalsLine} onChange={(e) => setWaTotalsLine(e.target.value)} className="font-mono text-xs" />
+                  <div className="text-[11px] text-muted-foreground">
+                    Tersedia variabel <code>{"{total_per_supplier}"}</code> pada template utama (Gabungan default sudah memuatnya).<br/>
+                    Variabel baris: <code>{"{supplier} {jumlah} {subtotal}"}</code>
+                  </div>
+                </div>
+                <div className="space-y-2 pt-2 border-t">
+                  <Label className="text-xs font-semibold">Template pesan ke Supplier (Kirim per Supplier)</Label>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Template utama</Label>
+                    <Textarea rows={7} value={waSupMain} onChange={(e) => setWaSupMain(e.target.value)} className="font-mono text-xs" />
+                    <div className="text-[11px] text-muted-foreground"><code>{"{cabang} {supplier} {periode} {jumlah} {subtotal} {rekening} {lines} {tanggal}"}</code></div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Baris per nota</Label>
+                    <Textarea rows={2} value={waSupLine} onChange={(e) => setWaSupLine(e.target.value)} className="font-mono text-xs" />
+                    <div className="text-[11px] text-muted-foreground"><code>{"{no} {tanggal} {item} {qty} {harga} {nominal} {status}"}</code></div>
+                  </div>
+                </div>
                 <Button size="sm" variant="outline" onClick={() => setWaText(buildText(waUseSelected && selected.size > 0 ? filtered.filter((i) => selected.has(i.id)) : filtered))}>Terapkan ke pesan</Button>
               </div>
             </details>
