@@ -1,6 +1,7 @@
 import { Link, Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
+import BrandLogo from "@/components/BrandLogo";
 import { Receipt, ShieldCheck, Building2, FileText, BarChart3, Smartphone, ArrowRight } from "lucide-react";
 
 const Index = () => {
@@ -24,12 +25,7 @@ const Index = () => {
   return (
     <div className="min-h-screen">
       <header className="container flex items-center justify-between py-4">
-        <div className="flex items-center gap-2.5 text-lg font-semibold">
-          <span className="grid h-9 w-9 place-items-center rounded-md bg-primary text-primary-foreground">
-            <Receipt className="h-5 w-5" />
-          </span>
-          NotaKu
-        </div>
+        <BrandLogo className="text-lg" />
         <Link to="/auth"><Button variant="outline">Masuk</Button></Link>
       </header>
 

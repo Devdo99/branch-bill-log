@@ -4,7 +4,7 @@ import { useBranch } from "@/contexts/BranchContext";
 import { supabase } from "@/integrations/supabase/client";
 import { formatRupiah, formatRupiahCompact } from "@/lib/format";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, CartesianGrid, ComposedChart, Area } from "recharts";
-import { TrendingUp, AlertCircle, CheckCircle2, Receipt, Package, Truck, Building2, Crown, Calendar, Layers, Wallet, BarChart3, LineChart as LineIcon, Coins, Percent, ArrowUpRight, ArrowDownRight, Scale } from "lucide-react";
+import { TrendingUp, AlertCircle, CheckCircle2, Receipt, Package, Truck, Building2, Crown, Calendar, Wallet, BarChart3, LineChart as LineIcon, Coins, Percent, ArrowUpRight, ArrowDownRight, Scale, FilePlus2, ListChecks } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -110,8 +110,12 @@ export default function ManagerDashboard() {
   }, [from, to, allRev, allInv, activeBranch, omsetTotal, bahanTotal]);
   const today = new Date().toISOString().slice(0, 10);
   const todayTotal = branchInv.filter((i) => i.invoice_date === today).reduce((s, i) => s + Number(i.total), 0);
+  const todayCount = branchInv.filter((i) => i.invoice_date === today).length;
   const belumTotal = branchInv.filter((i) => i.status === "BELUM").reduce((s, i) => s + Number(i.total), 0);
   const sudahTotal = branchInv.filter((i) => i.status === "SUDAH").reduce((s, i) => s + Number(i.total), 0);
+  const overdueTotal = branchInv.filter((i) => i.status === "BELUM" && i.invoice_date < today).reduce((s, i) => s + Number(i.total), 0);
+  const paidPct = bahanTotal > 0 ? (sudahTotal / bahanTotal) * 100 : 0;
+  const avgInvoice = branchInv.length ? bahanTotal / branchInv.length : 0;
   const uniqueItems = new Set(branchInv.map((i) => i.item_name.trim().toLowerCase())).size;
   const uniqueSuppliers = new Set(branchInv.map((i) => i.supplier.trim().toLowerCase())).size;
 
@@ -229,6 +233,12 @@ export default function ManagerDashboard() {
   const grandOmset = branchOmset.reduce((s, b) => s + b.omset, 0);
 
   const topBranch = branchSummary[0];
+  const topSupplier = supplierData[0];
+  const topItem = itemData[0];
+  const latestUnpaid = useMemo(() => branchInv
+    .filter((i) => i.status === "BELUM")
+    .sort((a, b) => b.invoice_date.localeCompare(a.invoice_date))
+    .slice(0, 4), [branchInv]);
 
   const COLORS = ["hsl(198 78% 42%)", "hsl(221 70% 50%)", "hsl(151 62% 38%)", "hsl(38 88% 54%)", "hsl(262 58% 58%)", "hsl(218 15% 52%)"];
 
@@ -321,15 +331,72 @@ export default function ManagerDashboard() {
         )}
       </div>
 
-      <div className="grid sm:grid-cols-3 gap-4">
-        <StatCard icon={<TrendingUp className="h-5 w-5" />} label="Tagihan Hari Ini" value={formatRupiah(todayTotal)} accent="primary" />
-        <StatCard icon={<AlertCircle className="h-5 w-5" />} label="Belum Dibayar" value={formatRupiah(belumTotal)} accent="warning" />
-        <StatCard icon={<CheckCircle2 className="h-5 w-5" />} label="Sudah Dibayar" value={formatRupiah(sudahTotal)} accent="success" />
+      <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
+        <div className="app-card overflow-hidden border-primary/20">
+          <div className="border-b bg-card px-5 py-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2 text-xs font-semibold uppercase text-muted-foreground">
+                  <Building2 className="h-4 w-4" />
+                  Ringkasan Cabang
+                </div>
+                <h2 className="mt-1 text-xl font-semibold leading-tight">{activeBranch?.name}</h2>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Link to="/manager/invoices" className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
+                  <FilePlus2 className="h-4 w-4" /> Cek nota
+                </Link>
+                <Link to="/manager/invoices" className="inline-flex h-9 items-center gap-2 rounded-md border bg-background px-3 text-sm font-semibold hover:bg-muted">
+                  <ListChecks className="h-4 w-4" /> Kelola nota
+                </Link>
+              </div>
+            </div>
+          </div>
+          <div className="grid gap-px bg-border sm:grid-cols-2 lg:grid-cols-4">
+            <KpiTile icon={<Coins className="h-4 w-4" />} label="Omset periode" value={formatRupiah(omsetTotal)} helper={periodCompare ? `${periodCompare.dOmset >= 0 ? "+" : ""}${periodCompare.dOmset.toFixed(1)}% vs lalu` : "Belum ada pembanding"} tone="primary" />
+            <KpiTile icon={<Package className="h-4 w-4" />} label="Bahan baku" value={formatRupiah(bahanTotal)} helper={`${branchInv.length} nota, rata-rata ${formatRupiahCompact(avgInvoice)}`} tone="warning" />
+            <KpiTile icon={<Wallet className="h-4 w-4" />} label="Laba kotor" value={formatRupiah(labaKotor)} helper={omsetTotal > 0 ? `Margin ${marginPct.toFixed(1)}%` : "Input omset untuk margin"} tone={labaKotor >= 0 ? "success" : "danger"} />
+            <KpiTile icon={<CheckCircle2 className="h-4 w-4" />} label="Pembayaran lunas" value={`${paidPct.toFixed(0)}%`} helper={`${formatRupiahCompact(sudahTotal)} dari ${formatRupiahCompact(bahanTotal)}`} tone="success" />
+          </div>
+        </div>
+
+        <div className="app-card p-4">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h3 className="font-semibold">Perlu Perhatian</h3>
+              <p className="text-xs text-muted-foreground">Nota belum dibayar dalam periode aktif</p>
+            </div>
+            <span className={`status-pill ${overdueTotal > 0 ? "bg-warning/15 text-warning-foreground" : "bg-success/10 text-success"}`}>
+              {overdueTotal > 0 ? "cek" : "aman"}
+            </span>
+          </div>
+          <div className="rounded-md border bg-muted/35 p-3">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <AlertCircle className="h-4 w-4 text-warning" /> Lewat hari ini
+            </div>
+            <div className="mt-1 text-xl font-semibold">{formatRupiah(overdueTotal)}</div>
+          </div>
+          <div className="mt-3 space-y-2">
+            {latestUnpaid.length === 0 ? (
+              <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">Tidak ada nota tertunda.</div>
+            ) : latestUnpaid.map((i) => (
+              <div key={i.id} className="flex items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-sm">
+                <div className="min-w-0">
+                  <div className="truncate font-medium">{i.supplier}</div>
+                  <div className="truncate text-xs text-muted-foreground">{i.invoice_date} - {i.item_name}</div>
+                </div>
+                <div className="shrink-0 font-semibold tabular-nums">{formatRupiahCompact(i.total)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
 
-      <div className="grid sm:grid-cols-2 gap-4 mt-4">
-        <StatCard icon={<Package className="h-5 w-5" />} label="Jenis Bahan Baku" value={`${uniqueItems} item`} accent="primary" />
-        <StatCard icon={<Truck className="h-5 w-5" />} label="Jumlah Supplier Aktif" value={`${uniqueSuppliers} supplier`} accent="success" />
+      <div className="mt-4 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard icon={<TrendingUp className="h-5 w-5" />} label="Tagihan Hari Ini" value={formatRupiah(todayTotal)} helper={`${todayCount} nota hari ini`} accent="primary" />
+        <StatCard icon={<AlertCircle className="h-5 w-5" />} label="Belum Dibayar" value={formatRupiah(belumTotal)} helper={`${(100 - paidPct).toFixed(0)}% dari tagihan`} accent="warning" />
+        <StatCard icon={<Truck className="h-5 w-5" />} label="Supplier Terbesar" value={topSupplier?.supplier ?? "-"} helper={topSupplier ? formatRupiah(topSupplier.total) : "Belum ada supplier"} accent="primary" />
+        <StatCard icon={<Package className="h-5 w-5" />} label="Item Terbesar" value={topItem?.item ?? "-"} helper={topItem ? `${formatRupiah(topItem.total)} - ${topItem.qty} qty` : "Belum ada item"} accent="success" />
       </div>
 
       {/* === RINGKASAN OMSET vs BAHAN BAKU === */}
@@ -728,19 +795,37 @@ export default function ManagerDashboard() {
   );
 }
 
-function StatCard({ icon, label, value, accent }: { icon: React.ReactNode; label: string; value: string; accent: "primary" | "warning" | "success" }) {
+function StatCard({ icon, label, value, helper, accent }: { icon: React.ReactNode; label: string; value: string; helper?: string; accent: "primary" | "warning" | "success" }) {
   const colorMap: Record<string, string> = {
     primary: "bg-primary/10 text-primary",
     warning: "bg-warning/12 text-warning",
     success: "bg-success/10 text-success",
   };
   return (
-    <div className="app-card p-5 flex items-start justify-between">
-      <div>
+    <div className="app-card p-5 flex min-h-[132px] items-start justify-between gap-3">
+      <div className="min-w-0">
         <div className="text-sm text-muted-foreground">{label}</div>
-        <div className="text-xl font-semibold mt-1">{value}</div>
+        <div className="mt-1 truncate text-xl font-semibold">{value}</div>
+        {helper && <div className="mt-2 text-xs text-muted-foreground">{helper}</div>}
       </div>
       <div className={`grid h-10 w-10 place-items-center rounded-lg ${colorMap[accent]}`}>{icon}</div>
+    </div>
+  );
+}
+
+function KpiTile({ icon, label, value, helper, tone }: { icon: React.ReactNode; label: string; value: string; helper: string; tone: "primary" | "warning" | "success" | "danger" }) {
+  const toneMap: Record<string, string> = {
+    primary: "bg-primary/10 text-primary",
+    warning: "bg-warning/15 text-warning-foreground",
+    success: "bg-success/10 text-success",
+    danger: "bg-destructive/10 text-destructive",
+  };
+  return (
+    <div className="min-h-[138px] bg-card p-4">
+      <div className={`mb-3 inline-flex h-8 w-8 items-center justify-center rounded-md ${toneMap[tone]}`}>{icon}</div>
+      <div className="text-xs font-medium uppercase text-muted-foreground">{label}</div>
+      <div className="mt-1 text-xl font-semibold leading-tight">{value}</div>
+      <div className="mt-2 text-xs text-muted-foreground">{helper}</div>
     </div>
   );
 }

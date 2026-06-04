@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranch } from "@/contexts/BranchContext";
 import { Button } from "@/components/ui/button";
+import BrandLogo from "@/components/BrandLogo";
 import {
   Sidebar,
   SidebarContent,
@@ -24,7 +25,6 @@ import {
   LineChart,
   LogOut,
   Plus,
-  Receipt,
   ShieldCheck,
   Truck,
   Users,
@@ -106,13 +106,11 @@ export default function AppShell({ children, title }: Props) {
       <Sidebar collapsible="icon" className="border-r border-sidebar-border">
         <SidebarHeader className="h-16 justify-center border-b border-sidebar-border px-3">
           <Link to={home} className="flex min-w-0 items-center gap-3 rounded-md px-1.5 py-1">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
-              <Receipt className="h-4 w-4" />
-            </span>
-            <span className="min-w-0 group-data-[collapsible=icon]:hidden">
-              <span className="block truncate text-sm font-semibold leading-5 text-sidebar-foreground">NotaKu</span>
-              <span className="block truncate text-xs text-sidebar-foreground/65">Branch bill log</span>
-            </span>
+            <BrandLogo
+              markClassName="h-8 w-8"
+              textClassName="text-sidebar-foreground group-data-[collapsible=icon]:hidden"
+              subtitle="Branch bill log"
+            />
           </Link>
         </SidebarHeader>
 
@@ -170,7 +168,7 @@ export default function AppShell({ children, title }: Props) {
             <div className="flex min-w-0 items-center gap-3">
               <SidebarTrigger className="h-9 w-9 border bg-card hover:bg-accent hover:text-accent-foreground" />
               <div className="min-w-0 md:hidden">
-                <div className="truncate text-sm font-semibold text-foreground">NotaKu</div>
+                <BrandLogo markClassName="h-7 w-7" textClassName="text-sm text-foreground" />
                 <div className="truncate text-xs text-muted-foreground">{roleLabel}</div>
               </div>
             </div>

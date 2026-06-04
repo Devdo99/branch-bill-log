@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import BrandLogo from "@/components/BrandLogo";
 import { toast } from "sonner";
 import { Building2, LogOut, Plus, Lock } from "lucide-react";
 
@@ -71,7 +72,7 @@ export default function SelectBranch() {
     <div className="min-h-screen">
       <header className="border-b bg-background/92 backdrop-blur">
         <div className="container flex items-center justify-between h-16">
-          <div className="font-semibold text-lg">NotaKu</div>
+          <BrandLogo className="text-lg" />
           <div className="flex items-center gap-3 text-sm">
             <span className="text-muted-foreground">Halo, <b className="text-foreground">{fullName}</b></span>
             <Button size="sm" variant="outline" onClick={handleLogout}>

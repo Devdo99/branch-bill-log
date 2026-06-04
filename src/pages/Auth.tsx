@@ -4,9 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import BrandLogo from "@/components/BrandLogo";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
-import { Receipt, Building2, Lock } from "lucide-react";
+import { Building2, Lock } from "lucide-react";
 import { z } from "zod";
 
 const registerSchema = z.object({
@@ -91,8 +92,7 @@ export default function Auth() {
     <div className="min-h-screen grid lg:grid-cols-2">
       <div className="hidden lg:flex bg-secondary text-secondary-foreground p-10 flex-col justify-between">
         <Link to="/" className="flex items-center gap-2.5 text-lg font-semibold">
-          <span className="grid h-8 w-8 place-items-center rounded-md bg-primary"><Receipt className="h-4 w-4 text-primary-foreground" /></span>
-          NotaKu
+          <BrandLogo markClassName="h-8 w-8" />
         </Link>
         <div>
           <div className="mb-5 inline-flex rounded-md border border-white/10 px-2 py-0.5 text-xs font-medium text-secondary-foreground/70">
