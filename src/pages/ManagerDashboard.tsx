@@ -230,13 +230,13 @@ export default function ManagerDashboard() {
 
   const topBranch = branchSummary[0];
 
-  const COLORS = ["hsl(152 72% 32%)", "hsl(152 72% 50%)", "hsl(0 0% 18%)", "hsl(38 92% 55%)", "hsl(152 40% 70%)", "hsl(0 0% 50%)"];
+  const COLORS = ["hsl(198 78% 42%)", "hsl(221 70% 50%)", "hsl(151 62% 38%)", "hsl(38 88% 54%)", "hsl(262 58% 58%)", "hsl(218 15% 52%)"];
 
-  if (loading) return <AppShell title="Dashboard"><p className="text-muted-foreground">Memuat…</p></AppShell>;
+  if (loading) return <AppShell title="Dashboard"><p className="text-muted-foreground">Memuat...</p></AppShell>;
 
   return (
-    <AppShell title={`Dashboard — ${activeBranch?.name}`}>
-      <div className="bg-card border rounded-xl shadow-card p-4 mb-4 space-y-3">
+    <AppShell title={`Dashboard - ${activeBranch?.name}`}>
+      <div className="app-card p-4 mb-4 space-y-3">
         <div className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
           <Calendar className="h-4 w-4" /> Filter Periode
         </div>
@@ -333,12 +333,12 @@ export default function ManagerDashboard() {
       </div>
 
       {/* === RINGKASAN OMSET vs BAHAN BAKU === */}
-      <div className="mt-6 bg-gradient-dark text-secondary-foreground rounded-xl shadow-elegant p-5">
+      <div className="mt-6 app-card border-primary/20 bg-accent/55 p-5">
         <div className="flex items-center gap-2 mb-4">
           <Scale className="h-5 w-5" />
-          <h3 className="font-display font-bold">Omset vs Bahan Baku</h3>
+          <h3 className="font-semibold">Omset vs Bahan Baku</h3>
           {!omsetTotal && (
-            <Link to="/manager/omset" className="ml-auto text-xs underline opacity-90">Input omset →</Link>
+            <Link to="/manager/omset" className="ml-auto text-xs underline opacity-90">Input omset</Link>
           )}
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -349,7 +349,7 @@ export default function ManagerDashboard() {
         </div>
         {omsetTotal > 0 && (
           <div className="mt-3">
-            <div className="h-2 rounded-full bg-white/15 overflow-hidden flex">
+            <div className="h-2 rounded-full bg-background/80 overflow-hidden flex">
               <div className="h-full bg-warning" style={{ width: `${Math.min(100, hppPct)}%` }} title={`Bahan baku ${hppPct.toFixed(1)}%`} />
               <div className="h-full bg-success" style={{ width: `${Math.max(0, 100 - hppPct)}%` }} title={`Laba kotor ${marginPct.toFixed(1)}%`} />
             </div>
@@ -367,13 +367,13 @@ export default function ManagerDashboard() {
       </div>
 
       {/* === TREN OMSET === */}
-      <div className="bg-card rounded-xl border shadow-card p-5 mt-6">
+      <div className="app-card p-4 mt-6">
         <div className="flex items-center justify-between gap-3 mb-4">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-5 w-5 text-success" />
-            <h3 className="font-display font-bold">Tren Omset (30 hari terakhir)</h3>
+            <h3 className="font-semibold">Tren Omset (30 hari terakhir)</h3>
           </div>
-          <Link to="/manager/omset" className="text-xs text-primary font-semibold">Kelola omset →</Link>
+          <Link to="/manager/omset" className="text-xs text-primary font-semibold">Kelola omset</Link>
         </div>
         {omsetTrend.length === 0 ? <EmptyChart /> : (
           <ResponsiveContainer width="100%" height={240}>
@@ -382,17 +382,17 @@ export default function ManagerDashboard() {
               <XAxis dataKey="date" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v) => formatRupiahCompact(v)} />
               <Tooltip formatter={(v: number) => formatRupiah(v)} />
-              <Line type="monotone" dataKey="omset" name="Omset" stroke="hsl(152 72% 32%)" strokeWidth={2.5} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="omset" name="Omset" stroke="hsl(198 78% 42%)" strokeWidth={2.5} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
         )}
       </div>
 
       {/* === PERBANDINGAN OMSET vs BAHAN BAKU CHART === */}
-      <div className="bg-card rounded-xl border shadow-card p-5 mt-6">
+      <div className="app-card p-4 mt-6">
         <div className="flex items-center gap-2 mb-4">
           <BarChart3 className="h-5 w-5 text-primary" />
-          <h3 className="font-display font-bold">Perbandingan Omset vs Bahan Baku per Hari</h3>
+          <h3 className="font-semibold">Perbandingan Omset vs Bahan Baku per Hari</h3>
         </div>
         {omsetVsBahan.length === 0 ? <EmptyChart /> : (
           <ResponsiveContainer width="100%" height={280}>
@@ -402,16 +402,16 @@ export default function ManagerDashboard() {
               <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v) => formatRupiahCompact(v)} />
               <Tooltip formatter={(v: number) => formatRupiah(v)} />
               <Legend />
-              <Bar dataKey="omset" name="Omset" fill="hsl(152 72% 32%)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="omset" name="Omset" fill="hsl(198 78% 42%)" radius={[4, 4, 0, 0]} />
               <Bar dataKey="bahan" name="Bahan Baku" fill="hsl(38 92% 55%)" radius={[4, 4, 0, 0]} />
-              <Line type="monotone" dataKey="laba" name="Laba Kotor" stroke="hsl(0 0% 18%)" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="laba" name="Laba Kotor" stroke="hsl(222 38% 24%)" strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         )}
       </div>
 
-      <div className="bg-card rounded-xl border shadow-card p-5 mt-6">
-        <h3 className="font-display font-bold mb-4">Tren Pengeluaran Harian (14 hari terakhir)</h3>
+      <div className="app-card p-4 mt-6">
+        <h3 className="font-semibold mb-4">Tren Pengeluaran Harian (14 hari terakhir)</h3>
         {trendData.length === 0 ? <EmptyChart /> : (
           <ResponsiveContainer width="100%" height={240}>
             <LineChart data={trendData}>
@@ -419,18 +419,18 @@ export default function ManagerDashboard() {
               <XAxis dataKey="date" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v) => formatRupiahCompact(v)} />
               <Tooltip formatter={(v: number) => formatRupiah(v)} />
-              <Line type="monotone" dataKey="total" stroke="hsl(152 72% 32%)" strokeWidth={2.5} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="total" stroke="hsl(198 78% 42%)" strokeWidth={2.5} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
         )}
       </div>
 
       {/* === TREN HARGA BAHAN BAKU === */}
-      <div className="bg-card rounded-xl border shadow-card p-5 mt-6">
+      <div className="app-card p-4 mt-6">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
           <div className="flex items-center gap-2">
             <LineIcon className="h-5 w-5 text-primary" />
-            <h3 className="font-display font-bold">Tren Harga Bahan Baku</h3>
+            <h3 className="font-semibold">Tren Harga Bahan Baku</h3>
           </div>
           <div className="min-w-[220px]">
             <Select value={trendItem} onValueChange={setTrendItem}>
@@ -469,21 +469,21 @@ export default function ManagerDashboard() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-4 mt-6">
-        <div className="bg-card rounded-xl border shadow-card p-5">
-          <h3 className="font-display font-bold mb-4">Tagihan per Supplier ({activeBranch?.name})</h3>
+        <div className="app-card p-4">
+          <h3 className="font-semibold mb-4">Tagihan per Supplier ({activeBranch?.name})</h3>
           {supplierData.length === 0 ? <EmptyChart /> : (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={supplierData}>
                 <XAxis dataKey="supplier" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v) => formatRupiahCompact(v)} />
                 <Tooltip formatter={(v: number) => formatRupiah(v)} />
-                <Bar dataKey="total" fill="hsl(152 72% 32%)" radius={[6,6,0,0]} />
+                <Bar dataKey="total" fill="hsl(198 78% 42%)" radius={[6,6,0,0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
         </div>
-        <div className="bg-card rounded-xl border shadow-card p-5">
-          <h3 className="font-display font-bold mb-4">Top Bahan Baku (berdasarkan nilai)</h3>
+        <div className="app-card p-4">
+          <h3 className="font-semibold mb-4">Top Bahan Baku (berdasarkan nilai)</h3>
           {itemData.length === 0 ? <EmptyChart /> : (
             <ResponsiveContainer width="100%" height={260}>
               <BarChart data={itemData} layout="vertical">
@@ -497,8 +497,8 @@ export default function ManagerDashboard() {
         </div>
       </div>
 
-      <div className="bg-card rounded-xl border shadow-card p-5 mt-6">
-          <h3 className="font-display font-bold mb-4">Tagihan per Cabang (semua)</h3>
+      <div className="app-card p-4 mt-6">
+          <h3 className="font-semibold mb-4">Tagihan per Cabang (semua)</h3>
           {branchData.every((b) => b.total === 0) ? <EmptyChart /> : (
             <ResponsiveContainer width="100%" height={260}>
               <PieChart>
@@ -517,9 +517,9 @@ export default function ManagerDashboard() {
       <div className="mt-8">
         <div className="flex items-center gap-2 mb-3">
           <Coins className="h-5 w-5 text-success" />
-          <h2 className="font-display text-xl font-bold">Omset & Profitabilitas per Cabang</h2>
+          <h2 className="text-xl font-semibold">Omset & Profitabilitas per Cabang</h2>
         </div>
-        <div className="bg-card rounded-xl border shadow-card overflow-hidden">
+        <div className="app-table">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
@@ -571,22 +571,22 @@ export default function ManagerDashboard() {
         </div>
       </div>
 
-      <div className="mt-6 bg-card rounded-xl border shadow-card p-5 flex items-center justify-between gap-4">
+      <div className="mt-6 app-card p-4 flex items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="grid h-11 w-11 place-items-center rounded-lg bg-accent text-accent-foreground"><Receipt className="h-5 w-5" /></div>
           <div>
-            <div className="font-display font-bold">Lihat semua nota & filter</div>
+            <div className="font-semibold">Lihat semua nota & filter</div>
             <div className="text-sm text-muted-foreground">Checklist untuk menandai nota sudah dibayar.</div>
           </div>
         </div>
-        <Link to="/manager/invoices" className="text-primary font-semibold">Buka →</Link>
+        <Link to="/manager/invoices" className="text-primary font-semibold">Buka</Link>
       </div>
 
       {/* === RINGKASAN SEMUA CABANG === */}
       <div className="mt-8">
         <div className="flex items-center gap-2 mb-3">
           <Building2 className="h-5 w-5 text-primary" />
-          <h2 className="font-display text-xl font-bold">Ringkasan Semua Cabang</h2>
+          <h2 className="text-xl font-semibold">Ringkasan Semua Cabang</h2>
         </div>
 
         <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
@@ -597,20 +597,20 @@ export default function ManagerDashboard() {
         </div>
 
         {topBranch && topBranch.total > 0 && (
-          <div className="bg-gradient-primary text-primary-foreground rounded-xl p-4 mb-4 flex items-center gap-3 shadow-card">
+          <div className="rounded-lg bg-primary text-primary-foreground p-4 mb-4 flex items-center gap-3 shadow-card">
             <Crown className="h-6 w-6" />
             <div className="flex-1">
               <div className="text-xs opacity-90">Cabang dengan pengeluaran terbesar</div>
-              <div className="font-display font-bold text-lg">{topBranch.name}</div>
+              <div className="font-semibold text-lg">{topBranch.name}</div>
             </div>
             <div className="text-right">
-              <div className="font-display font-bold">{formatRupiah(topBranch.total)}</div>
+              <div className="font-semibold">{formatRupiah(topBranch.total)}</div>
               <div className="text-xs opacity-90">{topBranch.count} nota</div>
             </div>
           </div>
         )}
 
-        <div className="bg-card rounded-xl border shadow-card overflow-hidden">
+        <div className="app-table">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
@@ -678,19 +678,19 @@ export default function ManagerDashboard() {
           {branchSummary.map((b) => {
             const pctPaid = b.total > 0 ? (b.sudah / b.total) * 100 : 0;
             return (
-              <div key={b.id} className="bg-card rounded-xl border shadow-card p-4">
+              <div key={b.id} className="app-card p-4">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <div className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-primary text-primary-foreground">
+                    <div className="grid h-9 w-9 place-items-center rounded-lg bg-primary text-primary-foreground">
                       <Building2 className="h-4 w-4" />
                     </div>
                     <div>
-                      <div className="font-display font-bold">{b.name}</div>
+                      <div className="font-semibold">{b.name}</div>
                       <div className="text-xs text-muted-foreground">{b.count} nota · {b.suppliers} supplier · {b.items} item</div>
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-display font-bold">{formatRupiah(b.total)}</div>
+                    <div className="font-semibold">{formatRupiah(b.total)}</div>
                     <div className="text-xs text-muted-foreground">total</div>
                   </div>
                 </div>
@@ -730,15 +730,15 @@ export default function ManagerDashboard() {
 
 function StatCard({ icon, label, value, accent }: { icon: React.ReactNode; label: string; value: string; accent: "primary" | "warning" | "success" }) {
   const colorMap: Record<string, string> = {
-    primary: "bg-gradient-primary text-primary-foreground",
-    warning: "bg-warning text-warning-foreground",
-    success: "bg-success text-success-foreground",
+    primary: "bg-primary/10 text-primary",
+    warning: "bg-warning/12 text-warning",
+    success: "bg-success/10 text-success",
   };
   return (
-    <div className="bg-card rounded-xl border shadow-card p-5 flex items-start justify-between">
+    <div className="app-card p-5 flex items-start justify-between">
       <div>
         <div className="text-sm text-muted-foreground">{label}</div>
-        <div className="font-display text-2xl font-bold mt-1">{value}</div>
+        <div className="text-xl font-semibold mt-1">{value}</div>
       </div>
       <div className={`grid h-10 w-10 place-items-center rounded-lg ${colorMap[accent]}`}>{icon}</div>
     </div>
@@ -750,11 +750,11 @@ function EmptyChart() {
 
 function MiniStat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div className="bg-card rounded-xl border shadow-card p-3 flex items-center gap-3">
+    <div className="app-card p-3 flex items-center gap-3">
       <div className="grid h-9 w-9 place-items-center rounded-lg bg-accent text-accent-foreground">{icon}</div>
       <div className="min-w-0">
         <div className="text-xs text-muted-foreground">{label}</div>
-        <div className="font-display font-bold truncate">{value}</div>
+        <div className="font-semibold truncate">{value}</div>
       </div>
     </div>
   );
@@ -763,11 +763,11 @@ function MiniStat({ icon, label, value }: { icon: React.ReactNode; label: string
 function DarkStat({ icon, label, value, delta, invertDelta, accent }: { icon: React.ReactNode; label: string; value: string; delta?: number; invertDelta?: boolean; accent?: "good" | "bad" }) {
   const showDelta = typeof delta === "number" && isFinite(delta) && delta !== 0;
   const positive = showDelta && (invertDelta ? delta! < 0 : delta! > 0);
-  const valueCls = accent === "good" ? "text-success-foreground" : accent === "bad" ? "text-destructive-foreground" : "";
+  const valueCls = accent === "good" ? "text-success" : accent === "bad" ? "text-destructive" : "text-foreground";
   return (
-    <div className="bg-white/10 backdrop-blur rounded-lg p-3">
-      <div className="flex items-center gap-1.5 text-[11px] opacity-90">{icon}{label}</div>
-      <div className={`font-display font-bold text-base mt-1 ${valueCls}`}>{value}</div>
+    <div className="rounded-lg border border-primary/10 bg-background/85 p-3 shadow-card">
+      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">{icon}{label}</div>
+      <div className={`font-semibold text-base mt-1 ${valueCls}`}>{value}</div>
       {showDelta && (
         <div className={`text-[11px] mt-0.5 flex items-center gap-0.5 ${positive ? "text-success" : "text-warning"}`}>
           {delta! > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}

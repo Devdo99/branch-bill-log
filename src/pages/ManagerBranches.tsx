@@ -50,24 +50,24 @@ export default function ManagerBranches() {
     <AppShell title="Cabang">
       <div className="flex justify-end mb-4">
         <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button className="bg-gradient-primary"><Plus className="h-4 w-4 mr-1" /> Tambah Cabang</Button></DialogTrigger>
+          <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-1" /> Tambah Cabang</Button></DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>Tambah Cabang Baru</DialogTitle></DialogHeader>
             <form onSubmit={create} className="space-y-4">
               <div className="space-y-1.5"><Label>Nama Cabang</Label><Input value={name} onChange={(e) => setName(e.target.value)} required /></div>
               <div className="space-y-1.5"><Label>PIN (4-6 digit)</Label><Input value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" required /></div>
-              <Button type="submit" disabled={saving} className="w-full bg-gradient-primary">{saving ? "Menyimpan…" : "Simpan"}</Button>
+              <Button type="submit" disabled={saving} className="w-full">{saving ? "Menyimpan…" : "Simpan"}</Button>
             </form>
           </DialogContent>
         </Dialog>
       </div>
 
       {loading ? <p className="text-muted-foreground">Memuat…</p> : branches.length === 0 ? (
-        <div className="bg-card border rounded-xl p-12 text-center text-muted-foreground">Belum ada cabang. Tambahkan cabang pertama.</div>
+        <div className="app-card p-10 text-center text-muted-foreground">Belum ada cabang. Tambahkan cabang pertama.</div>
       ) : (
         <div className="grid md:grid-cols-3 gap-4">
           {branches.map((b) => (
-            <div key={b.id} className="bg-card rounded-xl border shadow-card p-5 flex items-center justify-between">
+            <div key={b.id} className="app-card p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="grid h-11 w-11 place-items-center rounded-lg bg-accent text-accent-foreground"><Building2 className="h-5 w-5" /></div>
                 <div className="font-semibold">{b.name}</div>

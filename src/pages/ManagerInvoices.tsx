@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
 import { useBranch } from "@/contexts/BranchContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -100,6 +100,7 @@ interface Inv {
 export default function ManagerInvoices() {
   const { activeBranch } = useBranch();
   const { user } = useAuth();
+  const activeBranchId = activeBranch?.id;
   const [invs, setInvs] = useState<Inv[]>([]);
   const [loading, setLoading] = useState(true);
   const [supplier, setSupplier] = useState("");
@@ -147,21 +148,21 @@ export default function ManagerInvoices() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [downloading, setDownloading] = useState(false);
 
-  const load = async () => {
-    if (!activeBranch) return;
+  const load = useCallback(async () => {
+    if (!activeBranchId) return;
     setLoading(true);
     const { data, error } = await supabase.from("invoices").select("*")
-      .eq("branch_id", activeBranch.id).order("invoice_date", { ascending: false });
+      .eq("branch_id", activeBranchId).order("invoice_date", { ascending: false });
     if (error) toast.error(error.message);
     setInvs((data ?? []) as Inv[]);
     setLoading(false);
-  };
-  useEffect(() => { load(); }, [activeBranch?.id]);
+  }, [activeBranchId]);
+  useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    if (!activeBranch) return;
+    if (!activeBranchId) return;
     supabase.from("suppliers").select("name, bank_name, bank_account, account_holder, phone")
-      .eq("branch_id", activeBranch.id).order("name")
+      .eq("branch_id", activeBranchId).order("name")
       .then(({ data }) => {
         const list = (data ?? []) as any[];
         setSupplierOptions(list.map((s) => s.name));
@@ -169,7 +170,7 @@ export default function ManagerInvoices() {
         list.forEach((s) => { map[s.name] = { bank_name: s.bank_name, bank_account: s.bank_account, account_holder: s.account_holder, phone: s.phone }; });
         setSupplierBank(map);
       });
-  }, [activeBranch?.id]);
+  }, [activeBranchId]);
 
   const filtered = useMemo(() => invs.filter((i) => {
     if (supplier && !i.supplier.toLowerCase().includes(supplier.toLowerCase())) return false;
@@ -183,7 +184,12 @@ export default function ManagerInvoices() {
 
   const allFilteredSelected = filtered.length > 0 && filtered.every((i) => selected.has(i.id));
   const toggleSelect = (id: string) => {
-    setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    setSelected((prev) => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
   };
   const toggleSelectAll = () => {
     setSelected((prev) => {
@@ -529,7 +535,7 @@ export default function ManagerInvoices() {
         <StatCard icon={<Clock className="h-5 w-5" />} label="Belum Dibayar" value={formatRupiah(unpaidTotal)} tone="warning" />
       </div>
 
-      <div className="bg-card border rounded-xl shadow-card p-4 grid md:grid-cols-6 gap-3">
+      <div className="app-card p-4 grid md:grid-cols-6 gap-3">
         <div className="md:col-span-6 flex items-center gap-2 text-sm font-semibold text-muted-foreground -mb-1">
           <Filter className="h-4 w-4" /> Filter
         </div>
@@ -552,7 +558,7 @@ export default function ManagerInvoices() {
         </div>
         <div className="space-y-1.5"><Label>Dari</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
         <div className="space-y-1.5"><Label>Sampai</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
-        <div className="flex items-end"><div className="text-sm w-full"><div className="text-muted-foreground">Total</div><div className="font-display font-bold text-lg">{formatRupiah(totalFiltered)}</div></div></div>
+        <div className="flex items-end"><div className="text-sm w-full"><div className="text-muted-foreground">Total</div><div className="font-semibold text-lg">{formatRupiah(totalFiltered)}</div></div></div>
       </div>
 
       <div className="flex flex-wrap gap-2 mt-4">
@@ -569,7 +575,7 @@ export default function ManagerInvoices() {
         )}
       </div>
 
-      <div id="invoice-table-export" className="bg-card border rounded-xl shadow-card mt-4 overflow-hidden">
+      <div id="invoice-table-export" className="app-table mt-4">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted text-left">
@@ -593,7 +599,7 @@ export default function ManagerInvoices() {
                   <td className="p-3 text-right">{i.qty}</td>
                   <td className="p-3 text-right">{formatRupiah(Number(i.price))}</td>
                   <td className="p-3 text-right font-semibold">{formatRupiah(Number(i.total))}</td>
-                  <td className="p-3"><span className={`text-xs px-2 py-0.5 rounded-full ${i.status === "SUDAH" ? "bg-success text-success-foreground" : "bg-warning text-warning-foreground"}`}>{i.status}</span></td>
+                  <td className="p-3"><span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${i.status === "SUDAH" ? "bg-success/10 text-success" : "bg-warning/20 text-warning-foreground"}`}>{i.status}</span></td>
                   <td className="p-3">
                     <div className="flex items-center justify-end gap-1">
                       <Button size="icon" variant="ghost" title="Detail" onClick={() => openDetail(i)}><Eye className="h-4 w-4" /></Button>
@@ -617,7 +623,7 @@ export default function ManagerInvoices() {
               <Row k="Supplier" v={detail.supplier} />
               <Row k="Barang" v={detail.item_name} />
               <Row k="Qty × Harga" v={`${detail.qty} × ${formatRupiah(Number(detail.price))}`} />
-              <Row k="Total" v={<span className="font-bold">{formatRupiah(Number(detail.total))}</span>} />
+              <Row k="Total" v={<span className="font-semibold">{formatRupiah(Number(detail.total))}</span>} />
               <Row k="Status" v={detail.status} />
               {detail.paid_at && <Row k="Dibayar pada" v={new Date(detail.paid_at).toLocaleString("id-ID")} />}
               {photoUrl ? (
@@ -700,7 +706,7 @@ export default function ManagerInvoices() {
                 </div>
                 <div className="col-span-2 flex justify-between items-center bg-muted/40 rounded-md px-3 py-2">
                   <span className="text-muted-foreground text-sm">Total</span>
-                  <span className="font-display font-bold">{formatRupiah((Number(editQty) || 0) * (Number(editPrice) || 0))}</span>
+                  <span className="font-semibold">{formatRupiah((Number(editQty) || 0) * (Number(editPrice) || 0))}</span>
                 </div>
               </div>
               <div className="flex justify-end gap-2 pt-2">
@@ -871,11 +877,11 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
 function StatCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: "primary" | "success" | "warning" }) {
   const toneCls = tone === "success" ? "bg-success/10 text-success" : tone === "warning" ? "bg-warning/15 text-warning-foreground" : "bg-primary/10 text-primary";
   return (
-    <div className="bg-card border rounded-xl shadow-card p-3 flex items-center gap-3">
+    <div className="app-card p-3 flex items-center gap-3">
       <div className={`h-10 w-10 grid place-items-center rounded-lg ${toneCls}`}>{icon}</div>
       <div className="min-w-0">
         <div className="text-xs text-muted-foreground truncate">{label}</div>
-        <div className="font-display font-bold text-base truncate">{value}</div>
+        <div className="font-semibold text-base truncate">{value}</div>
       </div>
     </div>
   );

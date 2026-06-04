@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
 import { useBranch } from "@/contexts/BranchContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -40,6 +40,7 @@ interface AdminRow {
 export default function ManagerAdmins() {
   const { activeBranch } = useBranch();
   const { user } = useAuth();
+  const activeBranchId = activeBranch?.id;
   const [rows, setRows] = useState<AdminRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -49,12 +50,12 @@ export default function ManagerAdmins() {
   const [pendingPerms, setPendingPerms] = useState<Record<string, Partial<Record<PermKey, boolean>>>>({});
   const [deleting, setDeleting] = useState<AdminRow | null>(null);
 
-  const load = async () => {
-    if (!activeBranch) return;
+  const load = useCallback(async () => {
+    if (!activeBranchId) return;
     setLoading(true);
     const { data, error } = await (supabase.from("admin_permissions" as any) as any)
       .select("*")
-      .eq("branch_id", activeBranch.id)
+      .eq("branch_id", activeBranchId)
       .order("created_at", { ascending: false });
     if (error) toast.error(error.message);
     const list = (data ?? []) as AdminRow[];
@@ -67,8 +68,8 @@ export default function ManagerAdmins() {
     setRows(list);
     setPendingPerms({});
     setLoading(false);
-  };
-  useEffect(() => { load(); }, [activeBranch?.id]);
+  }, [activeBranchId]);
+  useEffect(() => { load(); }, [load]);
 
   const createAdmin = async () => {
     if (!activeBranch) return;
@@ -125,18 +126,18 @@ export default function ManagerAdmins() {
       <div className="grid lg:grid-cols-[1fr,360px] gap-5">
         <div className="space-y-4">
           {loading ? (
-            <div className="brutal-card p-6 text-muted-foreground">Memuat…</div>
+            <div className="app-card p-6 text-muted-foreground">Memuat…</div>
           ) : rows.length === 0 ? (
-            <div className="brutal-card p-8 text-center">
+            <div className="app-card p-8 text-center">
               <ShieldCheck className="h-10 w-10 mx-auto mb-2 opacity-60" />
               <div className="font-semibold">Belum ada admin di cabang ini</div>
               <div className="text-sm text-muted-foreground">Buat admin baru di panel kanan.</div>
             </div>
           ) : rows.map((r) => (
-            <div key={r.id} className="brutal-card p-4">
+            <div key={r.id} className="app-card p-4">
               <div className="flex items-center justify-between gap-2 mb-3">
                 <div>
-                  <div className="font-display font-bold">{r.full_name}</div>
+                  <div className="font-semibold">{r.full_name}</div>
                   <div className="text-xs text-muted-foreground font-mono">{r.user_id.slice(0, 8)}…</div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -145,14 +146,14 @@ export default function ManagerAdmins() {
                       <Save className="h-4 w-4 mr-1" /> Simpan
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" className="border-2 border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground" onClick={() => setDeleting(r)}>
+                  <Button size="sm" variant="outline" className="border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground" onClick={() => setDeleting(r)}>
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
               <div className="grid sm:grid-cols-2 gap-2">
                 {PERM_LABELS.map((p) => (
-                  <label key={p.key} className="flex items-start justify-between gap-3 p-3 rounded-md border-2 border-foreground bg-accent/40 cursor-pointer">
+                  <label key={p.key} className="flex items-start justify-between gap-3 p-3 rounded-md border border-border bg-accent/45 cursor-pointer transition-colors hover:border-primary/30 hover:bg-accent/70">
                     <div className="min-w-0">
                       <div className="font-semibold text-sm">{p.label}</div>
                       <div className="text-xs text-muted-foreground">{p.hint}</div>
@@ -165,12 +166,12 @@ export default function ManagerAdmins() {
           ))}
         </div>
 
-        <div className="brutal-card p-5 h-fit lg:sticky lg:top-24">
+        <div className="app-card p-5 h-fit lg:sticky lg:top-24">
           <div className="flex items-center gap-2 mb-3">
-            <div className="h-9 w-9 grid place-items-center rounded-md bg-primary border-2 border-foreground text-primary-foreground">
+            <div className="h-9 w-9 grid place-items-center rounded-md bg-primary text-primary-foreground">
               <UserPlus className="h-4 w-4" />
             </div>
-            <div className="font-display font-bold">Buat Admin Baru</div>
+            <div className="font-semibold">Buat Admin Baru</div>
           </div>
           <div className="space-y-3">
             <div className="space-y-1.5"><Label>Nama lengkap</Label><Input value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Nama admin" /></div>

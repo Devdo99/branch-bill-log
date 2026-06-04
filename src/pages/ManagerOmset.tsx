@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
 import { useBranch } from "@/contexts/BranchContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -18,6 +18,7 @@ interface Revenue {
 export default function ManagerOmset() {
   const { activeBranch } = useBranch();
   const { user } = useAuth();
+  const activeBranchId = activeBranch?.id;
   const [list, setList] = useState<Revenue[]>([]);
   const [loading, setLoading] = useState(true);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -36,18 +37,18 @@ export default function ManagerOmset() {
     return new Date(n.getFullYear(), n.getMonth() + 1, 0).toISOString().slice(0, 10);
   });
 
-  const load = async () => {
-    if (!activeBranch) return;
+  const load = useCallback(async () => {
+    if (!activeBranchId) return;
     setLoading(true);
     const { data, error } = await supabase.from("daily_revenues" as any)
       .select("id, revenue_date, amount, note")
-      .eq("branch_id", activeBranch.id)
+      .eq("branch_id", activeBranchId)
       .order("revenue_date", { ascending: false });
     if (error) toast.error(error.message);
     setList(((data ?? []) as unknown) as Revenue[]);
     setLoading(false);
-  };
-  useEffect(() => { load(); }, [activeBranch?.id]);
+  }, [activeBranchId]);
+  useEffect(() => { load(); }, [load]);
 
   const filtered = useMemo(() => list.filter((r) => {
     if (from && r.revenue_date < from) return false;
@@ -103,18 +104,18 @@ export default function ManagerOmset() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        <form onSubmit={submit} className="bg-card border rounded-xl shadow-card p-5 space-y-3">
-          <h3 className="font-display font-bold flex items-center gap-2"><Plus className="h-4 w-4" /> Input Omset Harian</h3>
+        <form onSubmit={submit} className="app-card p-4 space-y-3">
+          <h3 className="font-semibold flex items-center gap-2"><Plus className="h-4 w-4" /> Input Omset Harian</h3>
           <div className="space-y-1.5"><Label>Tanggal *</Label><Input type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></div>
           <div className="space-y-1.5"><Label>Jumlah Omset (Rp) *</Label><Input inputMode="numeric" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="cth: 2500000" required /></div>
           <div className="space-y-1.5"><Label>Catatan (opsional)</Label><Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Cuaca, event, dll." /></div>
-          <Button type="submit" className="w-full bg-gradient-primary"><Save className="h-4 w-4 mr-1" /> Simpan</Button>
+          <Button type="submit" className="w-full"><Save className="h-4 w-4 mr-1" /> Simpan</Button>
           <p className="text-xs text-muted-foreground">Jika tanggal sudah ada, datanya akan diperbarui.</p>
         </form>
 
-        <div className="lg:col-span-2 bg-card border rounded-xl shadow-card overflow-hidden">
+        <div className="lg:col-span-2 app-table">
           <div className="p-4 border-b flex flex-wrap items-end gap-3">
-            <h3 className="font-display font-bold mr-auto flex items-center gap-2"><Calendar className="h-4 w-4" /> Riwayat ({filtered.length})</h3>
+            <h3 className="font-semibold mr-auto flex items-center gap-2"><Calendar className="h-4 w-4" /> Riwayat ({filtered.length})</h3>
             <div className="space-y-1"><Label className="text-xs">Dari</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-8" /></div>
             <div className="space-y-1"><Label className="text-xs">Sampai</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-8" /></div>
           </div>
@@ -165,11 +166,11 @@ export default function ManagerOmset() {
 function Stat({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: "primary" | "success" | "warning" }) {
   const t = tone === "success" ? "bg-success/10 text-success" : tone === "warning" ? "bg-warning/15 text-warning-foreground" : "bg-primary/10 text-primary";
   return (
-    <div className="bg-card border rounded-xl shadow-card p-3 flex items-center gap-3">
+    <div className="app-card p-3 flex items-center gap-3">
       <div className={`h-10 w-10 grid place-items-center rounded-lg ${t}`}>{icon}</div>
       <div className="min-w-0">
         <div className="text-xs text-muted-foreground truncate">{label}</div>
-        <div className="font-display font-bold text-base truncate">{value}</div>
+        <div className="font-semibold text-base truncate">{value}</div>
       </div>
     </div>
   );

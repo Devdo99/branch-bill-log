@@ -24,6 +24,7 @@ const schema = z.object({
 export default function KasirInputNota() {
   const { user } = useAuth();
   const { cashierBranch } = useBranch();
+  const cashierBranchId = cashierBranch?.id;
   const nav = useNavigate();
   const [form, setForm] = useState({
     invoice_date: new Date().toISOString().slice(0, 10),
@@ -36,10 +37,10 @@ export default function KasirInputNota() {
   const [supplierMode, setSupplierMode] = useState<"select" | "new">("select");
 
   useEffect(() => {
-    if (!cashierBranch) return;
-    supabase.from("suppliers").select("id, name").eq("branch_id", cashierBranch.id).order("name")
+    if (!cashierBranchId) return;
+    supabase.from("suppliers").select("id, name").eq("branch_id", cashierBranchId).order("name")
       .then(({ data }) => setSuppliers(data ?? []));
-  }, [cashierBranch?.id]);
+  }, [cashierBranchId]);
 
   const total = (Number(form.qty) || 0) * (Number(form.price) || 0);
 
@@ -87,7 +88,7 @@ export default function KasirInputNota() {
   return (
     <AppShell title="Input Nota Baru">
       <form onSubmit={submit} className="grid lg:grid-cols-3 gap-6 max-w-5xl">
-        <div className="lg:col-span-2 bg-card border rounded-xl shadow-card p-6 space-y-4">
+        <div className="lg:col-span-2 app-card p-6 space-y-4">
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-1.5"><Label>Tanggal Nota</Label><Input type="date" value={form.invoice_date} onChange={(e) => setForm({ ...form, invoice_date: e.target.value })} required /></div>
             <div className="space-y-1.5">
@@ -95,7 +96,7 @@ export default function KasirInputNota() {
                 <Label>Supplier</Label>
                 <button type="button" className="text-xs text-primary font-medium"
                   onClick={() => { setSupplierMode(supplierMode === "select" ? "new" : "select"); setForm({ ...form, supplier: "" }); }}>
-                  {supplierMode === "select" ? "+ Supplier baru" : "← Pilih dari daftar"}
+                  {supplierMode === "select" ? "+ Supplier baru" : "Pilih dari daftar"}
                 </button>
               </div>
               {supplierMode === "select" ? (
@@ -103,7 +104,7 @@ export default function KasirInputNota() {
                   <div className="text-xs text-muted-foreground border rounded-md p-2">Belum ada supplier. Klik "+ Supplier baru" untuk mengetik manual.</div>
                 ) : (
                   <Select value={form.supplier} onValueChange={(v) => setForm({ ...form, supplier: v })}>
-                    <SelectTrigger><SelectValue placeholder="Pilih supplier…" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Pilih supplier..." /></SelectTrigger>
                     <SelectContent>{suppliers.map((s) => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}</SelectContent>
                   </Select>
                 )
@@ -117,16 +118,16 @@ export default function KasirInputNota() {
             <div className="space-y-1.5"><Label>Qty</Label><Input type="number" min={0.01} step="0.01" value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} required /></div>
             <div className="space-y-1.5"><Label>Harga Satuan</Label><Input type="number" min={0} step="1" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} required /></div>
           </div>
-          <div className="bg-gradient-dark text-secondary-foreground rounded-lg p-4 flex justify-between items-center">
+          <div className="rounded-lg border bg-muted/60 p-4 flex justify-between items-center">
             <span className="text-sm opacity-80">Total</span>
-            <span className="font-display text-2xl font-bold text-primary-glow">{formatRupiah(total)}</span>
+            <span className="text-xl font-semibold text-primary">{formatRupiah(total)}</span>
           </div>
-          <Button type="submit" disabled={saving} className="w-full bg-gradient-primary shadow-elegant" size="lg">
-            {saving ? "Menyimpan…" : "Simpan Nota"}
+          <Button type="submit" disabled={saving} className="w-full shadow-card" size="lg">
+            {saving ? "Menyimpan..." : "Simpan Nota"}
           </Button>
         </div>
 
-        <div className="bg-card border rounded-xl shadow-card p-6 space-y-3">
+        <div className="app-card p-6 space-y-3">
           <Label>Foto Nota</Label>
           {preview ? (
             <img src={preview} alt="preview" className="w-full rounded-lg border aspect-[3/4] object-cover" />

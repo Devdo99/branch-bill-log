@@ -41,7 +41,7 @@ export default function Auth() {
       if (error) { toast.error("Gagal memuat cabang"); return; }
       setBranches((data as any)?.branches ?? []);
     })();
-  }, [tab]);
+  }, [tab, branches.length]);
 
   const submitManager = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,20 +89,23 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2">
-      <div className="hidden lg:flex bg-gradient-dark text-secondary-foreground p-12 flex-col justify-between">
-        <Link to="/" className="flex items-center gap-2 font-display font-bold text-xl">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-primary"><Receipt className="h-5 w-5 text-primary-foreground" /></span>
+      <div className="hidden lg:flex bg-secondary text-secondary-foreground p-10 flex-col justify-between">
+        <Link to="/" className="flex items-center gap-2.5 text-lg font-semibold">
+          <span className="grid h-8 w-8 place-items-center rounded-md bg-primary"><Receipt className="h-4 w-4 text-primary-foreground" /></span>
           NotaKu
         </Link>
         <div>
-          <h2 className="font-display text-4xl font-extrabold leading-tight">Catat. Pantau. Lunasi.</h2>
-          <p className="mt-3 text-secondary-foreground/70 max-w-md">Manajemen nota tagihan supplier untuk bisnis multi cabang.</p>
+          <div className="mb-5 inline-flex rounded-md border border-white/10 px-2 py-0.5 text-xs font-medium text-secondary-foreground/70">
+            Sistem operasional cabang
+          </div>
+          <h2 className="text-2xl font-semibold leading-tight text-balance">Masuk untuk mengelola nota, pembayaran, dan akses cabang.</h2>
+          <p className="mt-4 text-sm leading-6 text-secondary-foreground/70 max-w-md">Antarmuka dibuat untuk pekerjaan harian: input cepat, data mudah dipindai, dan laporan siap dikirim saat dibutuhkan.</p>
         </div>
         <div className="text-xs text-secondary-foreground/50">© NotaKu</div>
       </div>
       <div className="flex items-center justify-center p-6">
         <div className="w-full max-w-md">
-          <h1 className="font-display text-3xl font-bold">Masuk</h1>
+          <h1 className="text-xl font-semibold">Masuk</h1>
           <p className="text-sm text-muted-foreground mt-1">Pilih jenis akun untuk masuk.</p>
 
           <Tabs value={tab} onValueChange={(v) => setTab(v as any)} className="mt-6">
@@ -127,8 +130,8 @@ export default function Auth() {
                   <Label>Password</Label>
                   <Input type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required />
                 </div>
-                <Button type="submit" disabled={loading} className="w-full bg-gradient-primary shadow-elegant" size="lg">
-                  {loading ? "Memproses…" : mode === "login" ? "Masuk" : "Daftar"}
+                <Button type="submit" disabled={loading} className="w-full" size="lg">
+                  {loading ? "Memproses..." : mode === "login" ? "Masuk" : "Daftar"}
                 </Button>
               </form>
               <div className="mt-4 text-sm text-center text-muted-foreground">
@@ -144,8 +147,8 @@ export default function Auth() {
                 <div className="space-y-1.5">
                   <Label className="flex items-center gap-2"><Building2 className="h-4 w-4" /> Cabang</Label>
                   <select value={branchId} onChange={(e) => setBranchId(e.target.value)} required
-                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                    <option value="">— Pilih cabang —</option>
+                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm">
+                    <option value="">Pilih cabang</option>
                     {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
                   </select>
                 </div>
@@ -155,8 +158,8 @@ export default function Auth() {
                     onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))}
                     placeholder="4-6 digit" required />
                 </div>
-                <Button type="submit" disabled={kasirLoading} className="w-full bg-gradient-primary shadow-elegant" size="lg">
-                  {kasirLoading ? "Memverifikasi…" : "Masuk Kasir"}
+                <Button type="submit" disabled={kasirLoading} className="w-full" size="lg">
+                  {kasirLoading ? "Memverifikasi..." : "Masuk Kasir"}
                 </Button>
                 <p className="text-xs text-muted-foreground text-center">
                   PIN diatur oleh manager saat membuat cabang.

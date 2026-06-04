@@ -42,11 +42,11 @@ export default function ManagerSetup() {
 
   return (
     <div className="min-h-screen grid place-items-center bg-muted/30 p-6">
-      <div className="bg-card rounded-2xl shadow-card border p-8 w-full max-w-md">
-        <div className="grid h-12 w-12 place-items-center rounded-xl bg-gradient-primary text-primary-foreground mx-auto">
+      <div className="app-card p-7 w-full max-w-md">
+        <div className="grid h-10 w-10 place-items-center rounded-md bg-primary text-primary-foreground mx-auto">
           <Building2 className="h-6 w-6" />
         </div>
-        <h1 className="font-display text-2xl font-bold text-center mt-4">Buat Cabang Pertama</h1>
+        <h1 className="text-xl font-semibold text-center mt-4">Buat Cabang Pertama</h1>
         <p className="text-sm text-muted-foreground text-center mt-1">Sebagai manager, mulai dengan satu cabang. PIN ini diperlukan setiap kali membuka cabang.</p>
         <form onSubmit={submit} className="space-y-4 mt-6">
           <div className="space-y-1.5">
@@ -57,7 +57,7 @@ export default function ManagerSetup() {
             <Label>PIN Cabang (4–6 digit)</Label>
             <Input value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, "").slice(0, 6))} inputMode="numeric" placeholder="••••" required />
           </div>
-          <Button type="submit" className="w-full bg-gradient-primary shadow-elegant" size="lg" disabled={loading}>
+          <Button type="submit" className="w-full" size="lg" disabled={loading}>
             {loading ? "Menyimpan…" : "Buat Cabang"}
           </Button>
         </form>

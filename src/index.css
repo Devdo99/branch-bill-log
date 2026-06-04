@@ -2,71 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
-All colors MUST be HSL.
-*/
+/* Design system tokens. All colors use HSL. */
 
 @layer base {
   :root {
-    /* Soft Neo-Brutalist: cream kuning + ink + aksen hijau */
-    --background: 54 96% 86%;
-    --foreground: 222 47% 11%;
+    --background: 210 24% 97%;
+    --foreground: 222 38% 12%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 222 38% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 222 38% 12%;
 
-    --primary: 142 71% 36%;
+    --primary: 198 78% 36%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 142 71% 45%;
+    --primary-glow: 198 72% 46%;
 
-    --secondary: 222 47% 11%;
-    --secondary-foreground: 54 96% 86%;
+    --secondary: 214 28% 92%;
+    --secondary-foreground: 222 32% 18%;
 
-    --muted: 54 70% 92%;
-    --muted-foreground: 222 20% 35%;
+    --muted: 214 28% 94%;
+    --muted-foreground: 218 15% 42%;
 
-    --accent: 54 96% 78%;
-    --accent-foreground: 222 47% 11%;
+    --accent: 199 84% 94%;
+    --accent-foreground: 199 76% 24%;
 
-    --success: 142 71% 36%;
+    --success: 151 62% 34%;
     --success-foreground: 0 0% 100%;
-    --warning: 32 96% 50%;
-    --warning-foreground: 222 47% 11%;
+    --warning: 38 88% 54%;
+    --warning-foreground: 34 42% 16%;
 
-    --destructive: 0 78% 50%;
+    --destructive: 0 68% 46%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 222 47% 11%;
-    --input: 222 47% 11%;
-    --ring: 142 71% 36%;
+    --border: 214 24% 87%;
+    --input: 214 24% 87%;
+    --ring: 198 78% 36%;
 
-    --radius: 0.6rem;
+    --radius: 0.375rem;
 
-    --gradient-primary: linear-gradient(135deg, hsl(142 71% 32%), hsl(142 71% 45%));
-    --gradient-dark: linear-gradient(160deg, hsl(222 47% 11%), hsl(222 47% 16%));
-    --shadow-elegant: 6px 6px 0 0 hsl(var(--foreground));
-    --shadow-card: 4px 4px 0 0 hsl(var(--foreground));
-    --shadow-brutal-sm: 3px 3px 0 0 hsl(var(--foreground));
-    --shadow-brutal-lg: 8px 8px 0 0 hsl(var(--foreground));
-
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --gradient-primary: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--primary)));
+    --gradient-dark: linear-gradient(180deg, hsl(215 24% 14%), hsl(215 24% 14%));
+    --shadow-elegant: 0 8px 24px hsl(222 38% 12% / 0.08);
+    --shadow-card: 0 1px 2px hsl(222 38% 12% / 0.06), 0 8px 24px hsl(222 38% 12% / 0.04);
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 222 28% 20%;
+    --sidebar-primary: 198 78% 36%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 199 84% 94%;
+    --sidebar-accent-foreground: 199 76% 24%;
+    --sidebar-border: 214 24% 88%;
+    --sidebar-ring: 198 78% 36%;
   }
 
   .dark {
@@ -113,26 +100,56 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html {
+    @apply antialiased;
+  }
+
   body {
     @apply bg-background text-foreground;
-    background-image:
-      radial-gradient(hsl(var(--foreground) / 0.06) 1px, transparent 1px);
-    background-size: 22px 22px;
+    font-family: "Segoe UI", Aptos, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "tnum";
+    letter-spacing: 0;
+    background: hsl(var(--background));
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  ::selection {
+    @apply bg-primary text-primary-foreground;
   }
 }
 
 @layer components {
-  .brutal-card {
-    @apply bg-card border-2 border-foreground rounded-[var(--radius)] shadow-card;
+  .app-chip {
+    @apply inline-flex items-center gap-1.5 rounded-md border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground;
   }
-  .brutal-card-sm {
-    @apply bg-card border-2 border-foreground rounded-[var(--radius)];
-    box-shadow: var(--shadow-brutal-sm);
+
+  .app-card {
+    @apply rounded-md border bg-card text-card-foreground shadow-card;
   }
-  .brutal-input {
-    @apply border-2 border-foreground bg-card rounded-md;
+
+  .app-panel {
+    @apply rounded-md border bg-card text-card-foreground shadow-card;
   }
-  .brutal-chip {
-    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border-2 border-foreground bg-card text-xs font-semibold;
+
+  .app-table {
+    @apply overflow-hidden rounded-md border bg-card shadow-card;
+  }
+
+  .status-pill {
+    @apply inline-flex items-center rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-normal;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
   }
 }

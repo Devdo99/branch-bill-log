@@ -3,9 +3,62 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranch } from "@/contexts/BranchContext";
 import { Button } from "@/components/ui/button";
-import { LogOut, Receipt, LayoutDashboard, FileText, Users, Building2, Plus, Truck, LineChart, ShieldCheck } from "lucide-react";
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarTrigger,
+  useSidebar,
+} from "@/components/ui/sidebar";
+import {
+  Building2,
+  FileText,
+  LayoutDashboard,
+  LineChart,
+  LogOut,
+  Plus,
+  Receipt,
+  ShieldCheck,
+  Truck,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface Props { children: ReactNode; title?: string }
+type NavItem = { to: string; label: string; icon: LucideIcon };
+
+function ShellNavItem({ item, active }: { item: NavItem; active: boolean }) {
+  const { setOpenMobile } = useSidebar();
+  const Icon = item.icon;
+
+  return (
+    <SidebarMenuItem>
+      <SidebarMenuButton
+        asChild
+        isActive={active}
+        tooltip={item.label}
+        className={cn(
+          "h-9 gap-3 border-l-2 border-transparent px-3 font-medium text-sidebar-foreground/75",
+          "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+          active && "border-l-sidebar-primary bg-sidebar-accent text-sidebar-accent-foreground shadow-none",
+        )}
+      >
+        <Link to={item.to} onClick={() => setOpenMobile(false)}>
+          <Icon className="h-4 w-4" />
+          <span>{item.label}</span>
+        </Link>
+      </SidebarMenuButton>
+    </SidebarMenuItem>
+  );
+}
 
 export default function AppShell({ children, title }: Props) {
   const { role, fullName, signOut } = useAuth();
@@ -27,7 +80,7 @@ export default function AppShell({ children, title }: Props) {
     { to: "/kasir/input", label: "Input Nota", icon: Plus },
   ];
 
-  let items: { to: string; label: string; icon: any }[] = [];
+  let items: NavItem[] = [];
   if (role === "kasir") items = kasirNav;
   else if (role === "manager") items = fullManagerNav.map(({ to, label, icon }) => ({ to, label, icon }));
   else if (role === "admin") {
@@ -44,74 +97,107 @@ export default function AppShell({ children, title }: Props) {
   const handleLogout = async () => { await signOut(); nav("/auth"); };
   const switchBranch = () => { setActiveBranch(null); nav("/manager/select-branch"); };
   const home = role === "manager" || role === "admin" ? "/manager" : "/kasir";
+  const roleLabel = role === "manager" ? "Manager" : role === "admin" ? "Admin" : "Kasir";
+
+  const isActive = (to: string) => loc.pathname === to;
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-30 bg-background border-b-2 border-foreground">
-        <div className="container flex h-16 items-center justify-between gap-4">
-          <Link to={home} className="flex items-center gap-2 font-display font-bold text-lg">
-            <span className="grid h-9 w-9 place-items-center rounded-md bg-primary border-2 border-foreground shadow-brutal-sm">
-              <Receipt className="h-5 w-5 text-primary-foreground" />
+    <SidebarProvider defaultOpen={false}>
+      <Sidebar collapsible="icon" className="border-r border-sidebar-border">
+        <SidebarHeader className="h-16 justify-center border-b border-sidebar-border px-3">
+          <Link to={home} className="flex min-w-0 items-center gap-3 rounded-md px-1.5 py-1">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
+              <Receipt className="h-4 w-4" />
             </span>
-            <span className="tracking-tight">NotaKu</span>
+            <span className="min-w-0 group-data-[collapsible=icon]:hidden">
+              <span className="block truncate text-sm font-semibold leading-5 text-sidebar-foreground">NotaKu</span>
+              <span className="block truncate text-xs text-sidebar-foreground/65">Branch bill log</span>
+            </span>
           </Link>
-          <div className="hidden md:flex items-center gap-1.5">
-            {items.map((it) => {
-              const Icon = it.icon;
-              const active = loc.pathname === it.to;
-              return (
-                <Link key={it.to} to={it.to}
-                  className={`px-3 py-2 rounded-md text-sm font-semibold flex items-center gap-2 border-2 transition-all ${active ? "bg-primary text-primary-foreground border-foreground shadow-brutal-sm" : "border-transparent hover:border-foreground hover:bg-accent"}`}>
-                  <Icon className="h-4 w-4" />{it.label}
-                </Link>
-              );
-            })}
+        </SidebarHeader>
+
+        <SidebarContent className="px-2 py-3">
+          <SidebarMenu>
+            {items.map((it) => (
+              <ShellNavItem key={it.to} item={it} active={isActive(it.to)} />
+            ))}
+          </SidebarMenu>
+        </SidebarContent>
+
+        <SidebarFooter className="border-t border-sidebar-border p-3">
+          {activeBranch && (
+            <button
+              onClick={(role === "manager" || role === "admin") ? switchBranch : undefined}
+              className="flex w-full items-center gap-3 rounded-md border border-sidebar-border bg-sidebar-accent/40 px-3 py-2.5 text-left text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:[&>svg]:text-sidebar-accent-foreground group-data-[collapsible=icon]:h-10 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+              title={activeBranch.name}
+            >
+              <Building2 className="h-4 w-4 shrink-0 text-sidebar-foreground/70" />
+              <span className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
+                <span className="block truncate font-medium">{activeBranch.name}</span>
+                {(role === "manager" || role === "admin") && <span className="block text-xs text-sidebar-foreground/65">Ganti cabang</span>}
+              </span>
+            </button>
+          )}
+          <div className="flex items-center gap-2 rounded-md border border-sidebar-border bg-sidebar-accent/40 px-3 py-2 text-sidebar-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-sidebar-primary text-xs font-semibold text-sidebar-primary-foreground">
+              {fullName?.slice(0, 1).toUpperCase() ?? "U"}
+            </div>
+            <div className="min-w-0 group-data-[collapsible=icon]:hidden">
+              <div className="truncate text-sm font-medium">{fullName}</div>
+              <div className="flex items-center gap-1 text-xs text-sidebar-foreground/65">
+                {role === "admin" && <ShieldCheck className="h-3 w-3" />}
+                {roleLabel}
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+          <Button
+            className="w-full justify-start border-sidebar-border bg-transparent text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+            size="sm"
+            variant="outline"
+            onClick={handleLogout}
+            title="Keluar"
+          >
+            <LogOut className="h-4 w-4" />
+            <span className="group-data-[collapsible=icon]:hidden">Keluar</span>
+          </Button>
+        </SidebarFooter>
+        <SidebarRail />
+      </Sidebar>
+
+      <SidebarInset>
+        <header className="sticky top-0 z-30 border-b bg-background/95 backdrop-blur">
+          <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+            <div className="flex min-w-0 items-center gap-3">
+              <SidebarTrigger className="h-9 w-9 border bg-card hover:bg-accent hover:text-accent-foreground" />
+              <div className="min-w-0 md:hidden">
+                <div className="truncate text-sm font-semibold text-foreground">NotaKu</div>
+                <div className="truncate text-xs text-muted-foreground">{roleLabel}</div>
+              </div>
+            </div>
             {activeBranch && (
-              <button onClick={(role === "manager" || role === "admin") ? switchBranch : undefined}
-                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-card border-2 border-foreground text-sm font-semibold shadow-brutal-sm hover:translate-y-[1px] hover:shadow-none transition-all">
-                <Building2 className="h-4 w-4" />
-                <span>{activeBranch.name}</span>
-                {(role === "manager" || role === "admin") && <span className="text-[10px] opacity-60">ganti</span>}
+              <button
+                onClick={(role === "manager" || role === "admin") ? switchBranch : undefined}
+                className="inline-flex min-w-0 items-center gap-2 rounded-md border bg-card px-3 py-2 text-sm font-medium transition-colors hover:bg-muted"
+              >
+                <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <span className="max-w-[11rem] truncate sm:max-w-xs">{activeBranch.name}</span>
               </button>
             )}
-            {role === "admin" && (
-              <span className="brutal-chip bg-accent hidden sm:inline-flex"><ShieldCheck className="h-3 w-3" /> Admin</span>
+          </div>
+        </header>
+
+        <div className="w-full flex-1 px-4 py-5 sm:px-6 lg:px-8 lg:py-7">
+          <div className="mx-auto w-full max-w-7xl">
+            {title && (
+              <div className="mb-5 border-b pb-4">
+                <p className="mb-1 text-xs font-medium uppercase text-muted-foreground">{roleLabel}</p>
+                <h1 className="text-lg font-semibold leading-tight tracking-normal md:text-xl">{title}</h1>
+              </div>
             )}
-            <Button size="sm" variant="outline" onClick={handleLogout} className="border-2 border-foreground font-semibold">
-              <LogOut className="h-4 w-4 mr-1" /> Keluar
-            </Button>
+            {children}
           </div>
         </div>
-        {/* Mobile nav */}
-        <div className="md:hidden border-t-2 border-foreground bg-accent/60">
-          <div className="container flex overflow-x-auto py-2 gap-1.5">
-            {items.map((it) => {
-              const Icon = it.icon;
-              const active = loc.pathname === it.to;
-              return (
-                <Link key={it.to} to={it.to}
-                  className={`px-2.5 py-1.5 rounded-md text-xs font-semibold flex items-center gap-1.5 whitespace-nowrap border-2 ${active ? "bg-primary text-primary-foreground border-foreground" : "bg-card border-foreground"}`}>
-                  <Icon className="h-4 w-4" />{it.label}
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      </header>
-      <main className="container py-6">
-        {title && (
-          <div className="mb-6 flex items-end justify-between gap-3 flex-wrap">
-            <h1 className="font-display text-2xl md:text-3xl font-bold tracking-tight">{title}</h1>
-            <div className="h-1.5 flex-1 min-w-[40px] bg-foreground rounded-full" />
-          </div>
-        )}
-        {children}
-      </main>
-      <footer className="container py-6 text-xs text-muted-foreground">
-        Masuk sebagai <span className="font-semibold text-foreground">{fullName}</span> · <span className="brutal-chip py-0.5">{role}</span>
-      </footer>
-    </div>
+      </SidebarInset>
+    </SidebarProvider>
   );
 }

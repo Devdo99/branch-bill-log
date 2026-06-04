@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import AppShell from "@/components/AppShell";
 import { useBranch } from "@/contexts/BranchContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -55,6 +55,7 @@ function parseCsv(text: string): string[][] {
 export default function ManagerSuppliers() {
   const { activeBranch } = useBranch();
   const { user } = useAuth();
+  const activeBranchId = activeBranch?.id;
   const [list, setList] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [name, setName] = useState("");
@@ -73,17 +74,17 @@ export default function ManagerSuppliers() {
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
 
-  const load = async () => {
-    if (!activeBranch) return;
+  const load = useCallback(async () => {
+    if (!activeBranchId) return;
     setLoading(true);
     const { data, error } = await supabase.from("suppliers")
       .select("id, name, note, bank_name, bank_account, account_holder, phone")
-      .eq("branch_id", activeBranch.id).order("name");
+      .eq("branch_id", activeBranchId).order("name");
     if (error) toast.error(error.message);
     setList((data ?? []) as Supplier[]);
     setLoading(false);
-  };
-  useEffect(() => { load(); }, [activeBranch?.id]);
+  }, [activeBranchId]);
+  useEffect(() => { load(); }, [load]);
 
   const add = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -183,8 +184,8 @@ export default function ManagerSuppliers() {
   return (
     <AppShell title={`Supplier — ${activeBranch?.name}`}>
       <div className="grid lg:grid-cols-3 gap-6">
-        <form onSubmit={add} className="bg-card border rounded-xl shadow-card p-5 space-y-3">
-          <h3 className="font-display font-bold">Tambah Supplier</h3>
+        <form onSubmit={add} className="app-card p-4 space-y-3">
+          <h3 className="font-semibold">Tambah Supplier</h3>
           <div className="space-y-1.5"><Label>Nama Supplier *</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="PT Sumber Pangan" required /></div>
           <div className="space-y-1.5"><Label>No. HP / WhatsApp</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="cth: 628123456789" /></div>
           <div className="space-y-1.5"><Label>Catatan (opsional)</Label><Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="No telp, alamat, jenis barang…" rows={3} /></div>
@@ -193,15 +194,15 @@ export default function ManagerSuppliers() {
             <div className="space-y-1.5"><Label>No. Rekening</Label><Input value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} placeholder="1234567890" /></div>
           </div>
           <div className="space-y-1.5"><Label>Atas Nama</Label><Input value={accountHolder} onChange={(e) => setAccountHolder(e.target.value)} placeholder="Nama pemilik rekening" /></div>
-          <Button type="submit" className="w-full bg-gradient-primary"><Plus className="h-4 w-4 mr-1" /> Simpan</Button>
+          <Button type="submit" className="w-full"><Plus className="h-4 w-4 mr-1" /> Simpan</Button>
         </form>
 
-        <div className="lg:col-span-2 bg-card border rounded-xl shadow-card overflow-hidden">
+        <div className="lg:col-span-2 app-table">
           <div className="p-4 border-b flex flex-wrap items-center gap-2">
-            <h3 className="font-display font-bold mr-auto">Daftar Supplier ({list.length})</h3>
+            <h3 className="font-semibold mr-auto">Daftar Supplier ({list.length})</h3>
             <Button size="sm" variant="outline" onClick={downloadTemplate}><FileSpreadsheet className="h-4 w-4 mr-1" />Template</Button>
             <Button size="sm" variant="outline" onClick={exportCsv} disabled={list.length === 0}><Download className="h-4 w-4 mr-1" />Export</Button>
-            <Button size="sm" onClick={onPickFile} disabled={importing} className="bg-gradient-primary"><Upload className="h-4 w-4 mr-1" />{importing ? "Mengimpor…" : "Import"}</Button>
+            <Button size="sm" onClick={onPickFile} disabled={importing}><Upload className="h-4 w-4 mr-1" />{importing ? "Mengimpor…" : "Import"}</Button>
             <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onFile} />
           </div>
           {loading ? <p className="p-5 text-muted-foreground">Memuat…</p>
@@ -229,11 +230,11 @@ export default function ManagerSuppliers() {
                     <>
                       <div className="flex-1 min-w-0">
                         <div className="font-semibold">{s.name}</div>
-                        {s.phone && <div className="text-xs text-muted-foreground">📱 {s.phone}</div>}
+                        {s.phone && <div className="text-xs text-muted-foreground">HP: {s.phone}</div>}
                         {s.note && <div className="text-sm text-muted-foreground whitespace-pre-wrap">{s.note}</div>}
                         {(s.bank_name || s.bank_account || s.account_holder) && (
                           <div className="mt-1 text-xs text-foreground/80 bg-muted/60 rounded px-2 py-1 inline-block">
-                            🏦 {s.bank_name || "-"} • <span className="font-mono">{s.bank_account || "-"}</span>
+                            Rekening: {s.bank_name || "-"} • <span className="font-mono">{s.bank_account || "-"}</span>
                             {s.account_holder && <> • a.n. {s.account_holder}</>}
                           </div>
                         )}

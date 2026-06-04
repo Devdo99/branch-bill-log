@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBranch } from "@/contexts/BranchContext";
@@ -21,10 +21,11 @@ export default function SelectBranch() {
   const [pin, setPin] = useState("");
   const [verifying, setVerifying] = useState(false);
 
-  const load = async () => {
+  const load = useCallback(async () => {
+    if (!user) return;
     if (role === "admin") {
       const { data, error } = await (supabase.from("admin_permissions" as any) as any)
-        .select("branches(id, name)").eq("user_id", user!.id);
+        .select("branches(id, name)").eq("user_id", user.id);
       if (error) toast.error(error.message);
       const list = ((data ?? []) as any[]).map((r) => r.branches).filter(Boolean);
       setBranches(list);
@@ -34,8 +35,8 @@ export default function SelectBranch() {
       setBranches(data ?? []);
     }
     setLoading(false);
-  };
-  useEffect(() => { load(); }, [role]);
+  }, [role, user]);
+  useEffect(() => { load(); }, [load]);
 
   const verify = async () => {
     if (!selected) return;
@@ -68,37 +69,37 @@ export default function SelectBranch() {
 
   return (
     <div className="min-h-screen">
-      <header className="bg-background border-b-2 border-foreground">
+      <header className="border-b bg-background/92 backdrop-blur">
         <div className="container flex items-center justify-between h-16">
-          <div className="font-display font-bold text-lg">NotaKu</div>
+          <div className="font-semibold text-lg">NotaKu</div>
           <div className="flex items-center gap-3 text-sm">
             <span className="text-muted-foreground">Halo, <b className="text-foreground">{fullName}</b></span>
-            <Button size="sm" variant="outline" onClick={handleLogout} className="border-2 border-foreground">
+            <Button size="sm" variant="outline" onClick={handleLogout}>
               <LogOut className="h-4 w-4 mr-1" /> Keluar
             </Button>
           </div>
         </div>
       </header>
       <main className="container py-10 max-w-3xl">
-        <h1 className="font-display text-3xl font-bold tracking-tight">Pilih Cabang</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Pilih Cabang</h1>
         <p className="text-muted-foreground">{role === "admin" ? "Pilih cabang yang ingin Anda kelola." : "Masukkan PIN untuk membuka dashboard cabang."}</p>
 
-        {loading ? <p className="mt-6 text-muted-foreground">Memuat…</p> : (
+        {loading ? <p className="mt-6 text-muted-foreground">Memuat...</p> : (
           <div className="grid sm:grid-cols-2 gap-4 mt-6">
             {branches.map((b) => (
               <button key={b.id} onClick={() => role === "admin" ? openAdminBranch(b) : (setSelected(b), setPin(""))}
-                className={`text-left brutal-card p-5 transition-all hover:-translate-y-0.5 hover:translate-x-0.5 ${selected?.id === b.id ? "ring-2 ring-primary" : ""}`}>
+                className={`text-left app-card p-5 transition hover:border-primary/40 hover:shadow-card ${selected?.id === b.id ? "ring-2 ring-primary" : ""}`}>
                 <div className="flex items-center gap-3">
-                  <div className="grid h-11 w-11 place-items-center rounded-md bg-primary text-primary-foreground border-2 border-foreground"><Building2 className="h-5 w-5" /></div>
+                  <div className="grid h-11 w-11 place-items-center rounded-md bg-primary text-primary-foreground"><Building2 className="h-5 w-5" /></div>
                   <div>
-                    <div className="font-display font-bold">{b.name}</div>
+                    <div className="font-semibold">{b.name}</div>
                     <div className="text-xs text-muted-foreground">Klik untuk membuka</div>
                   </div>
                 </div>
               </button>
             ))}
             {role !== "admin" && (
-              <Link to="/manager/branches" className="text-left bg-card border-2 border-dashed border-foreground rounded-md p-5 flex items-center gap-3 text-muted-foreground hover:text-foreground hover:bg-accent">
+              <Link to="/manager/branches" className="text-left bg-card border border-dashed rounded-md p-5 flex items-center gap-3 text-muted-foreground hover:text-foreground hover:bg-muted">
                 <Plus className="h-5 w-5" /> Kelola / Tambah Cabang
               </Link>
             )}
@@ -106,8 +107,8 @@ export default function SelectBranch() {
         )}
 
         {selected && role !== "admin" && (
-          <div className="mt-8 brutal-card p-6 max-w-sm">
-            <div className="flex items-center gap-2 font-display font-bold"><Lock className="h-4 w-4" /> PIN Cabang {selected.name}</div>
+          <div className="mt-8 app-card p-6 max-w-sm">
+            <div className="flex items-center gap-2 font-semibold"><Lock className="h-4 w-4" /> PIN Cabang {selected.name}</div>
             <div className="mt-4 space-y-3">
               <div className="space-y-1.5">
                 <Label>PIN</Label>
@@ -116,7 +117,7 @@ export default function SelectBranch() {
                   onKeyDown={(e) => e.key === "Enter" && verify()} />
               </div>
               <Button onClick={verify} disabled={verifying} className="w-full">
-                {verifying ? "Memverifikasi…" : "Buka Cabang"}
+                {verifying ? "Memverifikasi..." : "Buka Cabang"}
               </Button>
             </div>
           </div>

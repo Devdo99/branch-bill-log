@@ -5,7 +5,7 @@ import { useBranch } from "@/contexts/BranchContext";
 
 interface Props {
   children: ReactNode;
-  role?: "manager" | "kasir" | Array<"manager" | "kasir" | "admin">;
+  role?: "manager" | "kasir" | "admin" | Array<"manager" | "kasir" | "admin">;
   requireBranch?: boolean;
 }
 
@@ -23,7 +23,7 @@ export default function RequireAuth({ children, role, requireBranch }: Props) {
   }
   if (role) {
     const allowed = Array.isArray(role) ? role : [role];
-    if (!allowed.includes(userRole as any)) {
+    if (!allowed.includes(userRole)) {
       const fallback = userRole === "kasir" ? "/kasir" : "/manager/select-branch";
       return <Navigate to={fallback} replace />;
     }

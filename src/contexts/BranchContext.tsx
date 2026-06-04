@@ -29,6 +29,7 @@ export function BranchProvider({ children }: { children: ReactNode }) {
   const [activeBranch, setActiveBranchState] = useState<Branch | null>(() => {
     try { const v = sessionStorage.getItem(KEY); return v ? JSON.parse(v) : null; } catch { return null; }
   });
+  const activeBranchId = activeBranch?.id;
   const [cashierBranch, setCashierBranch] = useState<Branch | null>(null);
   const [adminPerms, setAdminPerms] = useState<AdminPerms | null>(null);
   const [adminBranches, setAdminBranches] = useState<Branch[]>([]);
@@ -41,7 +42,10 @@ export function BranchProvider({ children }: { children: ReactNode }) {
 
   // For kasir: auto-load assigned branch
   useEffect(() => {
-    if (!user || role !== "kasir") return;
+    if (!user || role !== "kasir") {
+      setCashierBranch(null);
+      return;
+    }
     (async () => {
       const { data } = await supabase
         .from("branch_users")
@@ -58,7 +62,10 @@ export function BranchProvider({ children }: { children: ReactNode }) {
 
   // For admin: load assigned branches
   useEffect(() => {
-    if (!user || role !== "admin") { setAdminBranches([]); return; }
+    if (!user || role !== "admin") {
+      setAdminBranches([]);
+      return;
+    }
     (async () => {
       const { data } = await (supabase.from("admin_permissions" as any) as any)
         .select("branch_id, branches(id, name)")
@@ -70,21 +77,22 @@ export function BranchProvider({ children }: { children: ReactNode }) {
         .map((b: any) => ({ id: b.id, name: b.name }));
       setAdminBranches(list);
       if (list.length === 1 && !activeBranch) setActiveBranch(list[0]);
+      if (activeBranch && !list.some((branch) => branch.id === activeBranch.id)) setActiveBranch(null);
     })();
-  }, [user, role]);
+  }, [user, role, activeBranch]);
 
   // For admin: load permissions for active branch
   useEffect(() => {
-    if (!user || role !== "admin" || !activeBranch) { setAdminPerms(null); return; }
+    if (!user || role !== "admin" || !activeBranchId) { setAdminPerms(null); return; }
     (async () => {
       const { data } = await (supabase.from("admin_permissions" as any) as any)
         .select("manage_invoices, mark_paid, manage_suppliers, manage_revenues, manage_cashiers, view_reports")
         .eq("user_id", user.id)
-        .eq("branch_id", activeBranch.id)
+        .eq("branch_id", activeBranchId)
         .maybeSingle();
       setAdminPerms((data as any) ?? null);
     })();
-  }, [user, role, activeBranch?.id]);
+  }, [user, role, activeBranchId]);
 
   return (
     <Ctx.Provider value={{ activeBranch, setActiveBranch, cashierBranch, adminPerms, adminBranches }}>{children}</Ctx.Provider>
