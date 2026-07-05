@@ -41,14 +41,8 @@ export default function KasirInputNota() {
   useEffect(() => {
     if (!cashierBranchId) return;
     supabase.from("suppliers").select("id, name, items").eq("branch_id", cashierBranchId).order("name")
-      .then(async (res) => {
-        if (res.error && res.error.code === "42703") {
-          // Fallback if 'items' column does not exist
-          const fallback = await supabase.from("suppliers").select("id, name").eq("branch_id", cashierBranchId).order("name");
-          setSuppliers((fallback.data ?? []).map(s => ({ ...s, items: null })));
-        } else {
-          setSuppliers(res.data ?? []);
-        }
+      .then((res) => {
+        setSuppliers((res.data ?? []) as { id: string; name: string; items: string | null }[]);
       });
   }, [cashierBranchId]);
 

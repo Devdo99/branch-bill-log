@@ -80,17 +80,9 @@ export default function ManagerSuppliers() {
   const load = useCallback(async () => {
     if (!activeBranchId) return;
     setLoading(true);
-    let res = await supabase.from("suppliers")
+    const res = await supabase.from("suppliers")
       .select("id, name, note, bank_name, bank_account, account_holder, phone, items")
       .eq("branch_id", activeBranchId).order("name");
-    
-    if (res.error && res.error.code === "42703") {
-      // Fallback if 'items' column does not exist
-      res = await supabase.from("suppliers")
-        .select("id, name, note, bank_name, bank_account, account_holder, phone")
-        .eq("branch_id", activeBranchId).order("name");
-    }
-    
     if (res.error) toast.error(res.error.message);
     setList((res.data ?? []) as Supplier[]);
     setLoading(false);
@@ -112,13 +104,7 @@ export default function ManagerSuppliers() {
       items: itemsField.trim() || null,
     };
     
-    let res = await supabase.from("suppliers").insert(payload);
-    
-    if (res.error && res.error.code === "42703") {
-      delete payload.items;
-      res = await supabase.from("suppliers").insert(payload);
-    }
-    
+    const res = await supabase.from("suppliers").insert(payload);
     if (res.error) return toast.error(res.error.message);
     toast.success("Supplier ditambahkan");
     setName(""); setNote(""); setBankName(""); setBankAccount(""); setAccountHolder(""); setPhone(""); setItemsField(""); load();
@@ -140,13 +126,7 @@ export default function ManagerSuppliers() {
       items: editItems.trim() || null,
     };
     
-    let res = await supabase.from("suppliers").update(payload).eq("id", editId);
-    
-    if (res.error && res.error.code === "42703") {
-      delete payload.items;
-      res = await supabase.from("suppliers").update(payload).eq("id", editId);
-    }
-    
+    const res = await supabase.from("suppliers").update(payload).eq("id", editId);
     if (res.error) return toast.error(res.error.message);
     toast.success("Tersimpan"); setEditId(null); load();
   };
@@ -197,19 +177,10 @@ export default function ManagerSuppliers() {
         };
         const ex = existing.get(name.toLowerCase());
         if (ex) {
-          let res = await supabase.from("suppliers").update(payload).eq("id", ex.id);
-          if (res.error && res.error.code === "42703") {
-            delete payload.items;
-            res = await supabase.from("suppliers").update(payload).eq("id", ex.id);
-          }
+          const res = await supabase.from("suppliers").update(payload).eq("id", ex.id);
           if (res.error) { skipped++; } else updated++;
         } else {
-          let res = await supabase.from("suppliers").insert({ ...payload, branch_id: activeBranch.id, created_by: user.id });
-          if (res.error && res.error.code === "42703") {
-            const p = { ...payload, branch_id: activeBranch.id, created_by: user.id };
-            delete p.items;
-            res = await supabase.from("suppliers").insert(p);
-          }
+          const res = await supabase.from("suppliers").insert({ ...payload, branch_id: activeBranch.id, created_by: user.id });
           if (res.error) { skipped++; } else inserted++;
         }
       }

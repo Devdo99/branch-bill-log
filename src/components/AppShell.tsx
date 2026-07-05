@@ -150,8 +150,9 @@ export default function AppShell({ children, title }: Props) {
   const nav = useNavigate();
   const loc = useLocation();
 
-  const managerGroups = [
+  const managerGroups: any[] = [
     {
+      label: "Menu",
       items: [
         {
           label: "Urusan Nota",
