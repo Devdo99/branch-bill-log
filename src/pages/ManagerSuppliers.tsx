@@ -14,9 +14,10 @@ interface Supplier {
   id: string; name: string; note: string | null;
   bank_name: string | null; bank_account: string | null; account_holder: string | null;
   phone: string | null;
+  items: string | null;
 }
 
-const CSV_HEADERS = ["name", "phone", "note", "bank_name", "bank_account", "account_holder"];
+const CSV_HEADERS = ["name", "phone", "note", "bank_name", "bank_account", "account_holder", "items"];
 const csvEscape = (v: string) => {
   const s = v ?? "";
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -64,6 +65,7 @@ export default function ManagerSuppliers() {
   const [bankAccount, setBankAccount] = useState("");
   const [accountHolder, setAccountHolder] = useState("");
   const [phone, setPhone] = useState("");
+  const [itemsField, setItemsField] = useState("");
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState("");
   const [editNote, setEditNote] = useState("");
@@ -71,17 +73,26 @@ export default function ManagerSuppliers() {
   const [editBankAccount, setEditBankAccount] = useState("");
   const [editAccountHolder, setEditAccountHolder] = useState("");
   const [editPhone, setEditPhone] = useState("");
+  const [editItems, setEditItems] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
 
   const load = useCallback(async () => {
     if (!activeBranchId) return;
     setLoading(true);
-    const { data, error } = await supabase.from("suppliers")
-      .select("id, name, note, bank_name, bank_account, account_holder, phone")
+    let res = await supabase.from("suppliers")
+      .select("id, name, note, bank_name, bank_account, account_holder, phone, items")
       .eq("branch_id", activeBranchId).order("name");
-    if (error) toast.error(error.message);
-    setList((data ?? []) as Supplier[]);
+    
+    if (res.error && res.error.code === "42703") {
+      // Fallback if 'items' column does not exist
+      res = await supabase.from("suppliers")
+        .select("id, name, note, bank_name, bank_account, account_holder, phone")
+        .eq("branch_id", activeBranchId).order("name");
+    }
+    
+    if (res.error) toast.error(res.error.message);
+    setList((res.data ?? []) as Supplier[]);
     setLoading(false);
   }, [activeBranchId]);
   useEffect(() => { load(); }, [load]);
@@ -91,34 +102,52 @@ export default function ManagerSuppliers() {
     if (!activeBranch || !user) return;
     const trimmed = name.trim();
     if (!trimmed) return toast.error("Nama supplier wajib diisi");
-    const { error } = await supabase.from("suppliers").insert({
+    
+    const payload: any = {
       branch_id: activeBranch.id, name: trimmed, note: note.trim() || null, created_by: user.id,
       bank_name: bankName.trim() || null,
       bank_account: bankAccount.trim() || null,
       account_holder: accountHolder.trim() || null,
       phone: phone.trim() || null,
-    });
-    if (error) return toast.error(error.message);
+      items: itemsField.trim() || null,
+    };
+    
+    let res = await supabase.from("suppliers").insert(payload);
+    
+    if (res.error && res.error.code === "42703") {
+      delete payload.items;
+      res = await supabase.from("suppliers").insert(payload);
+    }
+    
+    if (res.error) return toast.error(res.error.message);
     toast.success("Supplier ditambahkan");
-    setName(""); setNote(""); setBankName(""); setBankAccount(""); setAccountHolder(""); setPhone(""); load();
+    setName(""); setNote(""); setBankName(""); setBankAccount(""); setAccountHolder(""); setPhone(""); setItemsField(""); load();
   };
 
   const startEdit = (s: Supplier) => {
     setEditId(s.id); setEditName(s.name); setEditNote(s.note ?? "");
     setEditBankName(s.bank_name ?? ""); setEditBankAccount(s.bank_account ?? ""); setEditAccountHolder(s.account_holder ?? "");
-    setEditPhone(s.phone ?? "");
+    setEditPhone(s.phone ?? ""); setEditItems(s.items ?? "");
   };
   const saveEdit = async () => {
     if (!editId) return;
-    const { error } = await supabase.from("suppliers")
-      .update({
-        name: editName.trim(), note: editNote.trim() || null,
-        bank_name: editBankName.trim() || null,
-        bank_account: editBankAccount.trim() || null,
-        account_holder: editAccountHolder.trim() || null,
-        phone: editPhone.trim() || null,
-      }).eq("id", editId);
-    if (error) return toast.error(error.message);
+    const payload: any = {
+      name: editName.trim(), note: editNote.trim() || null,
+      bank_name: editBankName.trim() || null,
+      bank_account: editBankAccount.trim() || null,
+      account_holder: editAccountHolder.trim() || null,
+      phone: editPhone.trim() || null,
+      items: editItems.trim() || null,
+    };
+    
+    let res = await supabase.from("suppliers").update(payload).eq("id", editId);
+    
+    if (res.error && res.error.code === "42703") {
+      delete payload.items;
+      res = await supabase.from("suppliers").update(payload).eq("id", editId);
+    }
+    
+    if (res.error) return toast.error(res.error.message);
     toast.success("Tersimpan"); setEditId(null); load();
   };
   const remove = async (id: string) => {
@@ -129,14 +158,14 @@ export default function ManagerSuppliers() {
   };
 
   const exportCsv = () => {
-    const rows = [CSV_HEADERS, ...list.map(s => [s.name, s.phone ?? "", s.note ?? "", s.bank_name ?? "", s.bank_account ?? "", s.account_holder ?? ""])];
+    const rows = [CSV_HEADERS, ...list.map(s => [s.name, s.phone ?? "", s.note ?? "", s.bank_name ?? "", s.bank_account ?? "", s.account_holder ?? "", s.items ?? ""])];
     downloadFile(buildCsv(rows), `suppliers-${activeBranch?.name ?? "branch"}-${new Date().toISOString().slice(0, 10)}.csv`);
     toast.success(`${list.length} supplier diekspor`);
   };
   const downloadTemplate = () => {
     const rows = [CSV_HEADERS,
-      ["PT Sumber Pangan", "628123456789", "Pemasok sayur", "BCA", "1234567890", "Budi Santoso"],
-      ["UD Maju Jaya", "628987654321", "", "BRI", "987654321", "Ani"]];
+      ["PT Sumber Pangan", "628123456789", "Pemasok sayur", "BCA", "1234567890", "Budi Santoso", "Beras, Gula, Minyak Goreng"],
+      ["UD Maju Jaya", "628987654321", "", "BRI", "987654321", "Ani", "Tepung Terigu, Mentega"]];
     downloadFile(buildCsv(rows), "template-supplier.csv");
   };
   const onPickFile = () => fileRef.current?.click();
@@ -164,14 +193,24 @@ export default function ManagerSuppliers() {
           bank_name: (idx("bank_name") >= 0 ? row[idx("bank_name")]?.trim() : "") || null,
           bank_account: (idx("bank_account") >= 0 ? row[idx("bank_account")]?.trim() : "") || null,
           account_holder: (idx("account_holder") >= 0 ? row[idx("account_holder")]?.trim() : "") || null,
+          items: (idx("items") >= 0 ? row[idx("items")]?.trim() : "") || null,
         };
         const ex = existing.get(name.toLowerCase());
         if (ex) {
-          const { error } = await supabase.from("suppliers").update(payload).eq("id", ex.id);
-          if (error) { skipped++; } else updated++;
+          let res = await supabase.from("suppliers").update(payload).eq("id", ex.id);
+          if (res.error && res.error.code === "42703") {
+            delete payload.items;
+            res = await supabase.from("suppliers").update(payload).eq("id", ex.id);
+          }
+          if (res.error) { skipped++; } else updated++;
         } else {
-          const { error } = await supabase.from("suppliers").insert({ ...payload, branch_id: activeBranch.id, created_by: user.id });
-          if (error) { skipped++; } else inserted++;
+          let res = await supabase.from("suppliers").insert({ ...payload, branch_id: activeBranch.id, created_by: user.id });
+          if (res.error && res.error.code === "42703") {
+            const p = { ...payload, branch_id: activeBranch.id, created_by: user.id };
+            delete p.items;
+            res = await supabase.from("suppliers").insert(p);
+          }
+          if (res.error) { skipped++; } else inserted++;
         }
       }
       toast.success(`Import selesai • ${inserted} baru, ${updated} diperbarui${skipped ? `, ${skipped} dilewati` : ""}`);
@@ -188,7 +227,8 @@ export default function ManagerSuppliers() {
           <h3 className="font-semibold">Tambah Supplier</h3>
           <div className="space-y-1.5"><Label>Nama Supplier *</Label><Input value={name} onChange={(e) => setName(e.target.value)} placeholder="PT Sumber Pangan" required /></div>
           <div className="space-y-1.5"><Label>No. HP / WhatsApp</Label><Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="cth: 628123456789" /></div>
-          <div className="space-y-1.5"><Label>Catatan (opsional)</Label><Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="No telp, alamat, jenis barang…" rows={3} /></div>
+          <div className="space-y-1.5"><Label>Barang yang Dijual (pisahkan dengan koma)</Label><Input value={itemsField} onChange={(e) => setItemsField(e.target.value)} placeholder="cth: Beras, Gula, Minyak Goreng" /></div>
+          <div className="space-y-1.5"><Label>Catatan (opsional)</Label><Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Alamat, jenis jasa, dll." rows={2} /></div>
           <div className="grid grid-cols-2 gap-2">
             <div className="space-y-1.5"><Label>Bank</Label><Input value={bankName} onChange={(e) => setBankName(e.target.value)} placeholder="BCA / BRI / Mandiri" /></div>
             <div className="space-y-1.5"><Label>No. Rekening</Label><Input value={bankAccount} onChange={(e) => setBankAccount(e.target.value)} placeholder="1234567890" /></div>
@@ -213,9 +253,10 @@ export default function ManagerSuppliers() {
                 <li key={s.id} className="p-4 flex items-start gap-3">
                   {editId === s.id ? (
                     <div className="flex-1 space-y-2">
-                      <Input value={editName} onChange={(e) => setEditName(e.target.value)} />
+                      <Input value={editName} onChange={(e) => setEditName(e.target.value)} placeholder="Nama Supplier" />
                       <Input value={editPhone} onChange={(e) => setEditPhone(e.target.value)} placeholder="No. HP / WhatsApp" />
-                      <Textarea value={editNote} onChange={(e) => setEditNote(e.target.value)} rows={2} />
+                      <Input value={editItems} onChange={(e) => setEditItems(e.target.value)} placeholder="Daftar Barang (pisahkan koma)" />
+                      <Textarea value={editNote} onChange={(e) => setEditNote(e.target.value)} rows={2} placeholder="Catatan" />
                       <div className="grid grid-cols-2 gap-2">
                         <Input value={editBankName} onChange={(e) => setEditBankName(e.target.value)} placeholder="Bank" />
                         <Input value={editBankAccount} onChange={(e) => setEditBankAccount(e.target.value)} placeholder="No. Rekening" />
@@ -229,18 +270,25 @@ export default function ManagerSuppliers() {
                   ) : (
                     <>
                       <div className="flex-1 min-w-0">
-                        <div className="font-semibold">{s.name}</div>
+                        <div className="font-semibold text-base text-foreground">{s.name}</div>
                         {s.phone && <div className="text-xs text-muted-foreground">HP: {s.phone}</div>}
-                        {s.note && <div className="text-sm text-muted-foreground whitespace-pre-wrap">{s.note}</div>}
+                        {s.items && (
+                          <div className="text-xs text-primary font-medium mt-1 bg-primary/5 px-2.5 py-1 rounded inline-block">
+                            Barang dijual: {s.items}
+                          </div>
+                        )}
+                        {s.note && <div className="text-sm text-muted-foreground whitespace-pre-wrap mt-1">{s.note}</div>}
                         {(s.bank_name || s.bank_account || s.account_holder) && (
-                          <div className="mt-1 text-xs text-foreground/80 bg-muted/60 rounded px-2 py-1 inline-block">
+                          <div className="mt-2 text-xs text-foreground/80 bg-muted/60 rounded px-2.5 py-1.5 block max-w-max">
                             Rekening: {s.bank_name || "-"} • <span className="font-mono">{s.bank_account || "-"}</span>
                             {s.account_holder && <> • a.n. {s.account_holder}</>}
                           </div>
                         )}
                       </div>
-                      <Button size="icon" variant="ghost" onClick={() => startEdit(s)}><Pencil className="h-4 w-4" /></Button>
-                      <Button size="icon" variant="ghost" onClick={() => remove(s.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      <div className="flex items-center gap-1">
+                        <Button size="icon" variant="ghost" onClick={() => startEdit(s)}><Pencil className="h-4 w-4" /></Button>
+                        <Button size="icon" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => remove(s.id)}><Trash2 className="h-4 w-4" /></Button>
+                      </div>
                     </>
                   )}
                 </li>

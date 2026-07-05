@@ -599,7 +599,12 @@ export default function ManagerInvoices() {
                   <td className="p-3 text-right">{i.qty}</td>
                   <td className="p-3 text-right">{formatRupiah(Number(i.price))}</td>
                   <td className="p-3 text-right font-semibold">{formatRupiah(Number(i.total))}</td>
-                  <td className="p-3"><span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${i.status === "SUDAH" ? "bg-success/10 text-success" : "bg-warning/20 text-warning-foreground"}`}>{i.status}</span></td>
+                  <td className="p-3">
+                    <span className={`status-pill inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold border ${i.status === "SUDAH" ? "bg-emerald-50 text-emerald-700 border-emerald-200/50" : "bg-amber-50 text-amber-800 border-amber-200/50"}`}>
+                      {i.status === "SUDAH" ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
+                      {i.status}
+                    </span>
+                  </td>
                   <td className="p-3">
                     <div className="flex items-center justify-end gap-1">
                       <Button size="icon" variant="ghost" title="Detail" onClick={() => openDetail(i)}><Eye className="h-4 w-4" /></Button>

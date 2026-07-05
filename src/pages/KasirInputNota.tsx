@@ -26,6 +26,7 @@ export default function KasirInputNota() {
   const { cashierBranch } = useBranch();
   const cashierBranchId = cashierBranch?.id;
   const nav = useNavigate();
+
   const [form, setForm] = useState({
     invoice_date: new Date().toISOString().slice(0, 10),
     supplier: "", item_name: "", qty: "1", price: "0",
@@ -33,14 +34,36 @@ export default function KasirInputNota() {
   const [photo, setPhoto] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([]);
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string; items: string | null }[]>([]);
   const [supplierMode, setSupplierMode] = useState<"select" | "new">("select");
+  const [itemInputMode, setItemInputMode] = useState<"select" | "text">("text");
 
   useEffect(() => {
     if (!cashierBranchId) return;
-    supabase.from("suppliers").select("id, name").eq("branch_id", cashierBranchId).order("name")
-      .then(({ data }) => setSuppliers(data ?? []));
+    supabase.from("suppliers").select("id, name, items").eq("branch_id", cashierBranchId).order("name")
+      .then(async (res) => {
+        if (res.error && res.error.code === "42703") {
+          // Fallback if 'items' column does not exist
+          const fallback = await supabase.from("suppliers").select("id, name").eq("branch_id", cashierBranchId).order("name");
+          setSuppliers((fallback.data ?? []).map(s => ({ ...s, items: null })));
+        } else {
+          setSuppliers(res.data ?? []);
+        }
+      });
   }, [cashierBranchId]);
+
+  // Dynamically set items list and default selection when supplier changes
+  useEffect(() => {
+    const sel = suppliers.find(s => s.name === form.supplier);
+    const items = sel?.items ? sel.items.split(",").map(i => i.trim()).filter(Boolean) : [];
+    if (items.length > 0) {
+      setItemInputMode("select");
+      setForm(f => ({ ...f, item_name: items[0] }));
+    } else {
+      setItemInputMode("text");
+      setForm(f => ({ ...f, item_name: "" }));
+    }
+  }, [form.supplier, suppliers]);
 
   const total = (Number(form.qty) || 0) * (Number(form.price) || 0);
 
@@ -85,6 +108,11 @@ export default function KasirInputNota() {
     finally { setSaving(false); }
   };
 
+  const currentSupplier = suppliers.find(s => s.name === form.supplier);
+  const predefinedItems = currentSupplier?.items 
+    ? currentSupplier.items.split(",").map(i => i.trim()).filter(Boolean)
+    : [];
+
   return (
     <AppShell title="Input Nota Baru">
       <form onSubmit={submit} className="grid lg:grid-cols-3 gap-6 max-w-5xl">
@@ -113,7 +141,35 @@ export default function KasirInputNota() {
               )}
             </div>
           </div>
-          <div className="space-y-1.5"><Label>Nama Barang</Label><Input value={form.item_name} onChange={(e) => setForm({ ...form, item_name: e.target.value })} required /></div>
+
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Label>Nama Barang</Label>
+              {predefinedItems.length > 0 && (
+                <button type="button" className="text-xs text-primary font-medium"
+                  onClick={() => {
+                    const nextMode = itemInputMode === "select" ? "text" : "select";
+                    setItemInputMode(nextMode);
+                    setForm(f => ({ ...f, item_name: nextMode === "select" ? predefinedItems[0] : "" }));
+                  }}>
+                  {itemInputMode === "select" ? "+ Ketik manual" : "Pilih dari daftar"}
+                </button>
+              )}
+            </div>
+            {itemInputMode === "select" && predefinedItems.length > 0 ? (
+              <Select value={form.item_name} onValueChange={(v) => setForm({ ...form, item_name: v })}>
+                <SelectTrigger><SelectValue placeholder="Pilih barang..." /></SelectTrigger>
+                <SelectContent>
+                  {predefinedItems.map((item) => (
+                    <SelectItem key={item} value={item}>{item}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <Input value={form.item_name} onChange={(e) => setForm({ ...form, item_name: e.target.value })} placeholder="cth: Beras Pandanwangi" required />
+            )}
+          </div>
+
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="space-y-1.5"><Label>Qty</Label><Input type="number" min={0.01} step="0.01" value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} required /></div>
             <div className="space-y-1.5"><Label>Harga Satuan</Label><Input type="number" min={0} step="1" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} required /></div>
@@ -128,23 +184,35 @@ export default function KasirInputNota() {
         </div>
 
         <div className="app-card p-6 space-y-3">
-          <Label>Foto Nota</Label>
+          <Label className="font-semibold text-foreground">Foto Bukti Nota</Label>
           {preview ? (
-            <img src={preview} alt="preview" className="w-full rounded-lg border aspect-[3/4] object-cover" />
+            <img src={preview} alt="preview" className="w-full rounded-lg border aspect-[3/4] object-cover shadow-sm" />
           ) : (
-            <div className="aspect-[3/4] border-2 border-dashed rounded-lg grid place-items-center text-muted-foreground text-sm text-center p-4">
-              Foto/upload nota di sini
+            <div className="aspect-[3/4] border-2 border-dashed border-primary/20 rounded-lg grid place-items-center text-muted-foreground text-sm text-center p-6 bg-muted/20 hover:bg-muted/30 transition-colors">
+              <div className="flex flex-col items-center gap-2">
+                <div className="h-12 w-12 rounded-full bg-primary/10 text-primary grid place-items-center mb-1">
+                  <Camera className="h-6 w-6" />
+                </div>
+                <span className="font-medium text-foreground">Ambil Foto Nota</span>
+                <span className="text-xs text-muted-foreground max-w-[150px] leading-relaxed">Gunakan kamera HP atau unggah file gambar</span>
+              </div>
             </div>
           )}
-          <div className="grid grid-cols-2 gap-2">
-            <label className="cursor-pointer"><input type="file" accept="image/*" capture="environment" hidden onChange={(e) => onPhoto(e.target.files?.[0] ?? null)} />
-              <div className="border rounded-lg py-2 text-center text-sm flex items-center justify-center gap-1 hover:bg-muted"><Camera className="h-4 w-4" /> Kamera</div>
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <label className="cursor-pointer">
+              <input type="file" accept="image/*" capture="environment" hidden onChange={(e) => onPhoto(e.target.files?.[0] ?? null)} />
+              <div className="border border-primary/20 hover:border-primary/40 rounded-lg py-2.5 text-center text-xs font-semibold flex items-center justify-center gap-1.5 transition bg-primary/5 hover:bg-primary/10 text-primary">
+                <Camera className="h-4 w-4" /> Kamera
+              </div>
             </label>
-            <label className="cursor-pointer"><input type="file" accept="image/*" hidden onChange={(e) => onPhoto(e.target.files?.[0] ?? null)} />
-              <div className="border rounded-lg py-2 text-center text-sm flex items-center justify-center gap-1 hover:bg-muted"><Upload className="h-4 w-4" /> Upload</div>
+            <label className="cursor-pointer">
+              <input type="file" accept="image/*" hidden onChange={(e) => onPhoto(e.target.files?.[0] ?? null)} />
+              <div className="border border-primary/20 hover:border-primary/40 rounded-lg py-2.5 text-center text-xs font-semibold flex items-center justify-center gap-1.5 transition bg-primary/5 hover:bg-primary/10 text-primary">
+                <Upload className="h-4 w-4" /> Galeri File
+              </div>
             </label>
           </div>
-          {photo && <Button type="button" variant="ghost" size="sm" className="w-full" onClick={() => onPhoto(null)}>Hapus foto</Button>}
+          {photo && <Button type="button" variant="ghost" size="sm" className="w-full text-destructive hover:bg-destructive/10" onClick={() => onPhoto(null)}>Hapus foto</Button>}
         </div>
       </form>
     </AppShell>

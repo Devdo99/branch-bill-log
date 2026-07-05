@@ -1,13 +1,33 @@
 <svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="512" height="512" fill="#0F749F"/>
-  <rect x="96" y="96" width="320" height="320" rx="80" fill="#0B5F85"/>
-  <path d="M152 132C152 114.327 166.327 100 184 100H308L360 152V380C360 397.673 345.673 412 328 412H184C166.327 412 152 397.673 152 380V132Z" fill="white"/>
-  <path d="M308 100V144C308 152.837 315.163 160 324 160H360L308 100Z" fill="#CDEFFC"/>
-  <path d="M196 204H312" stroke="#0F749F" stroke-width="22" stroke-linecap="round"/>
-  <path d="M196 254H282" stroke="#0F749F" stroke-width="22" stroke-linecap="round"/>
-  <path d="M196 304H252" stroke="#0F749F" stroke-width="22" stroke-linecap="round"/>
-  <circle cx="322" cy="292" r="21" fill="#13A56B"/>
-  <circle cx="284" cy="352" r="21" fill="#13A56B"/>
-  <circle cx="360" cy="352" r="21" fill="#13A56B"/>
-  <path d="M322 314V330M322 330H284M322 330H360" stroke="#13A56B" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <defs>
+    <linearGradient id="bcaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0056A3" />
+      <stop offset="100%" stop-color="#002447" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="16" flood-color="#000b1a" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <rect width="512" height="512" fill="url(#bcaGrad)"/>
+  
+  <!-- White circular badge floating in the center -->
+  <circle cx="256" cy="256" r="140" fill="white" filter="url(#shadow)"/>
+  
+  <!-- Stylized Clove (Cengkeh) Emblem representing financial harmony and growth -->
+  <g transform="translate(0, -10)">
+    <!-- Left Leaf -->
+    <path d="M256 220 C200 220, 160 260, 185 315 C215 310, 240 280, 256 220 Z" fill="#0056A3"/>
+    
+    <!-- Right Leaf -->
+    <path d="M256 220 C312 220, 352 260, 327 315 C297 310, 272 280, 256 220 Z" fill="#0056A3"/>
+    
+    <!-- Center Vertical Leaf -->
+    <path d="M256 165 C266 210, 276 250, 256 305 C236 250, 246 210, 256 165 Z" fill="#003D75"/>
+    
+    <!-- Clove Star / Diamond inside the center leaf -->
+    <path d="M256 200 L262 215 L277 215 L265 224 L270 239 L256 230 L242 239 L247 224 L235 215 L250 215 Z" fill="#FFC72C"/>
+    
+    <!-- Golden Core Dot -->
+    <circle cx="256" cy="320" r="14" fill="#FFC72C"/>
+  </g>
 </svg>
