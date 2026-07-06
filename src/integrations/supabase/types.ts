@@ -258,6 +258,122 @@ export type Database = {
           },
         ]
       }
+      monthly_reports: {
+        Row: {
+          beban_administrasi: number | null
+          beban_bahan_baku: number | null
+          beban_karyawan: number | null
+          beban_marketing: number | null
+          beban_non_operasional_opex: number | null
+          bpjs_kesehatan: number | null
+          bpjs_ketenagakerjaan: number | null
+          branch_id: string | null
+          catering: number | null
+          cicilan_thr: number | null
+          created_at: string
+          depresiasi: number | null
+          dine_in: number | null
+          emas_3_tahun: number | null
+          fee_ebanking: number | null
+          fee_gofood: number | null
+          fee_online_food: number | null
+          gaji_karyawan: number | null
+          id: string
+          kontrakan_karyawan: number | null
+          maintenance: number | null
+          online_revenue: number | null
+          pajak_reklame: number | null
+          pajak_restoran: number | null
+          pesiar: number | null
+          putra_baru: number | null
+          report_month: string
+          sedekah_tambahan: number | null
+          selisih_kehilangan: number | null
+          selisih_kehilangan_shrinkage: number | null
+          selisih_mokapos: number | null
+          take_away: number | null
+          tambahan: number | null
+        }
+        Insert: {
+          beban_administrasi?: number | null
+          beban_bahan_baku?: number | null
+          beban_karyawan?: number | null
+          beban_marketing?: number | null
+          beban_non_operasional_opex?: number | null
+          bpjs_kesehatan?: number | null
+          bpjs_ketenagakerjaan?: number | null
+          branch_id?: string | null
+          catering?: number | null
+          cicilan_thr?: number | null
+          created_at?: string
+          depresiasi?: number | null
+          dine_in?: number | null
+          emas_3_tahun?: number | null
+          fee_ebanking?: number | null
+          fee_gofood?: number | null
+          fee_online_food?: number | null
+          gaji_karyawan?: number | null
+          id?: string
+          kontrakan_karyawan?: number | null
+          maintenance?: number | null
+          online_revenue?: number | null
+          pajak_reklame?: number | null
+          pajak_restoran?: number | null
+          pesiar?: number | null
+          putra_baru?: number | null
+          report_month: string
+          sedekah_tambahan?: number | null
+          selisih_kehilangan?: number | null
+          selisih_kehilangan_shrinkage?: number | null
+          selisih_mokapos?: number | null
+          take_away?: number | null
+          tambahan?: number | null
+        }
+        Update: {
+          beban_administrasi?: number | null
+          beban_bahan_baku?: number | null
+          beban_karyawan?: number | null
+          beban_marketing?: number | null
+          beban_non_operasional_opex?: number | null
+          bpjs_kesehatan?: number | null
+          bpjs_ketenagakerjaan?: number | null
+          branch_id?: string | null
+          catering?: number | null
+          cicilan_thr?: number | null
+          created_at?: string
+          depresiasi?: number | null
+          dine_in?: number | null
+          emas_3_tahun?: number | null
+          fee_ebanking?: number | null
+          fee_gofood?: number | null
+          fee_online_food?: number | null
+          gaji_karyawan?: number | null
+          id?: string
+          kontrakan_karyawan?: number | null
+          maintenance?: number | null
+          online_revenue?: number | null
+          pajak_reklame?: number | null
+          pajak_restoran?: number | null
+          pesiar?: number | null
+          putra_baru?: number | null
+          report_month?: string
+          sedekah_tambahan?: number | null
+          selisih_kehilangan?: number | null
+          selisih_kehilangan_shrinkage?: number | null
+          selisih_mokapos?: number | null
+          take_away?: number | null
+          tambahan?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monthly_reports_branch_id_fkey"
+            columns: ["branch_id"]
+            isOneToOne: false
+            referencedRelation: "branches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           created_at: string
