@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# WhatsApp Gateway Backend
+backend/node_modules/
+backend/auth_session/

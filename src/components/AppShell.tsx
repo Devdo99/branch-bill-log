@@ -81,14 +81,27 @@ function ShellNavItem({ item, active }: { item: NavItem; active: boolean }) {
         isActive={active}
         tooltip={item.label}
         className={cn(
-          "h-9 gap-3 border-l-2 border-transparent px-3 font-medium text-sidebar-foreground/75",
-          "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-          active && "border-l-sidebar-primary bg-sidebar-accent text-sidebar-accent-foreground shadow-none",
+          "group/mbtn relative h-9 gap-2.5 overflow-visible rounded-lg px-2.5 font-medium text-sidebar-foreground/75",
+          "transition-all duration-200 hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground",
+          active &&
+            "bg-gradient-to-r from-[hsl(var(--sidebar-primary)/0.32)] via-[hsl(var(--sidebar-primary)/0.12)] to-transparent text-sidebar-accent-foreground shadow-[inset_0_0_0_1px_hsl(var(--sidebar-primary)/0.35),0_2px_14px_hsl(var(--sidebar-primary)/0.28)]",
         )}
       >
-        <Link to={item.to!} onClick={() => setOpenMobile(false)}>
-          <Icon className="h-4 w-4 shrink-0" />
-          <span>{item.label}</span>
+        <Link to={item.to!} onClick={() => setOpenMobile(false)} className="relative flex w-full items-center gap-2.5">
+          <span
+            className={cn(
+              "grid h-6 w-6 shrink-0 place-items-center rounded-md transition-all duration-200",
+              active
+                ? "bg-[hsl(var(--sidebar-primary)/0.35)] text-[hsl(var(--sidebar-glow))] shadow-[0_0_10px_hsl(var(--sidebar-primary)/0.4)]"
+                : "bg-sidebar-accent/40 text-sidebar-foreground/70 group-hover/mbtn:bg-sidebar-accent group-hover/mbtn:text-sidebar-accent-foreground",
+            )}
+          >
+            <Icon className="h-[15px] w-[15px] shrink-0" />
+          </span>
+          <span className="truncate">{item.label}</span>
+          {active && (
+            <span className="absolute right-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-[hsl(var(--sidebar-glow))] shadow-[0_0_8px_hsl(var(--sidebar-glow)/0.9)] group-data-[collapsible=icon]:hidden" />
+          )}
         </Link>
       </SidebarMenuButton>
     </SidebarMenuItem>
@@ -107,17 +120,28 @@ function ShellCollapsibleNavItem({ item, activePath }: { item: NavItem; activePa
           <SidebarMenuButton 
             tooltip={item.label}
             className={cn(
-              "h-9 gap-3 px-3 font-medium text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
-              isSubActive && "text-sidebar-accent-foreground font-semibold"
+              "group/mbtn relative h-9 gap-2.5 overflow-visible rounded-lg px-2.5 font-medium text-sidebar-foreground/75",
+              "transition-all duration-200 hover:bg-sidebar-accent/80 hover:text-sidebar-accent-foreground",
+              isSubActive &&
+                "bg-gradient-to-r from-[hsl(var(--sidebar-primary)/0.22)] via-[hsl(var(--sidebar-primary)/0.08)] to-transparent text-sidebar-accent-foreground"
             )}
           >
-            <Icon className="h-4 w-4 shrink-0" />
-            <span>{item.label}</span>
-            <ChevronRight className="ml-auto h-4 w-4 shrink-0 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
+            <span
+              className={cn(
+                "grid h-6 w-6 shrink-0 place-items-center rounded-md transition-all duration-200",
+                isSubActive
+                  ? "bg-[hsl(var(--sidebar-primary)/0.35)] text-[hsl(var(--sidebar-glow))] shadow-[0_0_10px_hsl(var(--sidebar-primary)/0.35)]"
+                  : "bg-sidebar-accent/40 text-sidebar-foreground/70 group-hover/mbtn:bg-sidebar-accent group-hover/mbtn:text-sidebar-accent-foreground",
+              )}
+            >
+              <Icon className="h-[15px] w-[15px] shrink-0" />
+            </span>
+            <span className="truncate">{item.label}</span>
+            <ChevronRight className="ml-auto h-4 w-4 shrink-0 text-sidebar-foreground/50 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
           </SidebarMenuButton>
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <SidebarMenuSub className="border-l border-sidebar-border/60 ml-5 px-0 py-0.5 space-y-0.5">
+          <SidebarMenuSub className="relative ml-4 border-l border-sidebar-border/60 px-0 py-1 space-y-0.5">
             {item.subItems?.map((sub) => {
               const active = activePath === sub.to;
               return (
@@ -126,12 +150,21 @@ function ShellCollapsibleNavItem({ item, activePath }: { item: NavItem; activePa
                     asChild 
                     isActive={active}
                     className={cn(
-                      "h-8 px-3 text-xs text-sidebar-foreground/70 hover:text-sidebar-accent-foreground",
-                      active && "text-sidebar-accent-foreground font-medium bg-sidebar-accent/50"
+                      "group/sub relative h-8 rounded-lg px-3 text-xs font-medium text-sidebar-foreground/65 transition-all duration-200 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
+                      active &&
+                        "bg-[hsl(var(--sidebar-primary)/0.28)] text-sidebar-accent-foreground shadow-[inset_0_0_0_1px_hsl(var(--sidebar-primary)/0.3)]"
                     )}
                   >
-                    <Link to={sub.to} onClick={() => setOpenMobile(false)}>
-                      <span>{sub.label}</span>
+                    <Link to={sub.to} onClick={() => setOpenMobile(false)} className="relative flex w-full items-center gap-2">
+                      <span
+                        className={cn(
+                          "h-1.5 w-1.5 shrink-0 rounded-full transition-all duration-200",
+                          active
+                            ? "bg-[hsl(var(--sidebar-glow))] shadow-[0_0_6px_hsl(var(--sidebar-glow)/0.9)]"
+                            : "bg-sidebar-foreground/30 group-hover/sub:bg-sidebar-foreground/60"
+                        )}
+                      />
+                      <span className="truncate">{sub.label}</span>
                     </Link>
                   </SidebarMenuSubButton>
                 </SidebarMenuSubItem>
@@ -168,6 +201,7 @@ export default function AppShell({ children, title }: Props) {
           icon: Wallet,
           subItems: [
             { to: "/manager/finance", label: "Laporan Keuangan", perm: "view_reports" as const, viewPerm: true },
+            { to: "/manager/payments", label: "Laporan Pembayaran", perm: "view_reports" as const, viewPerm: true },
             { to: "/manager/profit-loss", label: "Laba Rugi", perm: "view_reports" as const, viewPerm: true },
             { to: "/manager/omset", label: "Omset Harian", perm: "manage_revenues" as const, viewPerm: true },
           ]
@@ -179,6 +213,7 @@ export default function AppShell({ children, title }: Props) {
             { to: "/manager/cashiers", label: "Data Kasir", perm: "manage_cashiers" as const },
             { to: "/manager/admins", label: "Kelola Admin", managerOnly: true },
             { to: "/manager/branches", label: "Kelola Cabang", managerOnly: true },
+            { to: "/manager/whatsapp", label: "WhatsApp Gateway", managerOnly: true },
           ]
         }
       ]
@@ -260,11 +295,12 @@ export default function AppShell({ children, title }: Props) {
       setSidebarOpen(open);
       localStorage.setItem("notaku.sidebarOpen", String(open));
     }}>
-      <Sidebar collapsible="icon" className="border-r border-sidebar-border">
-        <SidebarHeader className="h-16 justify-center border-b border-sidebar-border px-3">
-          <Link to={home} className="flex min-w-0 items-center gap-3 rounded-md px-1.5 py-1">
+      <Sidebar collapsible="icon" className="app-sidebar-bg border-r border-sidebar-border/80">
+        <SidebarHeader className="relative h-16 justify-center overflow-hidden border-b border-sidebar-border/70 px-3">
+          <div className="pointer-events-none absolute -right-10 -top-12 h-32 w-32 rounded-full bg-[hsl(var(--sidebar-primary)/0.28)] blur-2xl" />
+          <Link to={home} className="relative flex min-w-0 items-center gap-3 rounded-md px-1.5 py-1 transition-opacity hover:opacity-90">
             <BrandLogo
-              markClassName="h-8 w-8"
+              markClassName="h-8 w-8 drop-shadow-[0_0_10px_hsl(var(--sidebar-primary)/0.6)]"
               textClassName="text-sidebar-foreground group-data-[collapsible=icon]:hidden"
               subtitle="Branch bill log"
             />
@@ -275,7 +311,8 @@ export default function AppShell({ children, title }: Props) {
           {groups.map((group, idx) => (
             <SidebarGroup key={group.label ?? idx} className="px-0 py-0">
               {group.label && (
-                <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden px-3 text-[10px] uppercase tracking-wider font-bold text-muted-foreground/80 mb-1.5">
+                <SidebarGroupLabel className="group-data-[collapsible=icon]:hidden mb-1.5 flex items-center gap-1.5 px-3 text-[10px] font-bold uppercase tracking-[0.14em] text-sidebar-foreground/45">
+                  <span className="h-1 w-1 rounded-full bg-[hsl(var(--sidebar-glow)/0.7)] shadow-[0_0_6px_hsl(var(--sidebar-glow)/0.8)]" />
                   {group.label}
                 </SidebarGroupLabel>
               )}
@@ -294,34 +331,36 @@ export default function AppShell({ children, title }: Props) {
           ))}
         </SidebarContent>
 
-        <SidebarFooter className="border-t border-sidebar-border p-3">
+        <SidebarFooter className="relative border-t border-sidebar-border/70 p-3">
           {activeBranch && (
             <button
               onClick={(role === "manager" || role === "admin") ? switchBranch : undefined}
-              className="flex w-full items-center gap-3 rounded-md border border-sidebar-border bg-sidebar-accent/40 px-3 py-2.5 text-left text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground hover:[&>svg]:text-sidebar-accent-foreground group-data-[collapsible=icon]:h-10 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+              className="group/br flex w-full items-center gap-2.5 rounded-lg border border-sidebar-border/70 bg-sidebar-accent/30 px-2.5 py-2 text-left text-sm text-sidebar-foreground transition-all duration-200 hover:border-[hsl(var(--sidebar-primary)/0.5)] hover:bg-sidebar-accent/60 hover:shadow-[0_0_14px_hsl(var(--sidebar-primary)/0.25)] group-data-[collapsible=icon]:h-10 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
               title={activeBranch.name}
             >
-              <Building2 className="h-4 w-4 shrink-0 text-sidebar-foreground/70" />
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-gradient-to-br from-[hsl(var(--sidebar-primary))] to-[hsl(var(--sidebar-primary)/0.6)] text-white shadow-[0_2px_10px_hsl(var(--sidebar-primary)/0.35)]">
+                <Building2 className="h-3.5 w-3.5" />
+              </span>
               <span className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
                 <span className="block truncate font-medium">{activeBranch.name}</span>
-                {(role === "manager" || role === "admin") && <span className="block text-xs text-sidebar-foreground/65">Ganti cabang</span>}
+                {(role === "manager" || role === "admin") && <span className="block text-xs text-sidebar-foreground/55">Ganti cabang</span>}
               </span>
             </button>
           )}
-          <div className="flex items-center gap-2 rounded-md border border-sidebar-border bg-sidebar-accent/40 px-3 py-2 text-sidebar-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
-            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-sidebar-primary text-xs font-semibold text-sidebar-primary-foreground">
+          <div className="flex items-center gap-2.5 rounded-lg border border-sidebar-border/70 bg-sidebar-accent/30 px-2.5 py-2 text-sidebar-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0">
+            <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-[hsl(var(--sidebar-primary))] via-[hsl(var(--sidebar-primary)/0.8)] to-[hsl(var(--sidebar-glow))] text-xs font-bold text-sidebar-primary-foreground shadow-[0_2px_10px_hsl(var(--sidebar-primary)/0.4)] ring-1 ring-white/20">
               {fullName?.slice(0, 1).toUpperCase() ?? "U"}
             </div>
             <div className="min-w-0 group-data-[collapsible=icon]:hidden">
               <div className="truncate text-sm font-medium">{fullName}</div>
-              <div className="flex items-center gap-1 text-xs text-sidebar-foreground/65">
-                {role === "admin" && <ShieldCheck className="h-3 w-3" />}
+              <div className="flex items-center gap-1 text-xs text-sidebar-foreground/55">
+                {role === "admin" && <ShieldCheck className="h-3 w-3 text-[hsl(var(--sidebar-glow))]" />}
                 {roleLabel}
               </div>
             </div>
           </div>
           <Button
-            className="w-full justify-start border-sidebar-border bg-transparent text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+            className="w-full justify-start gap-2.5 border-sidebar-border/70 bg-sidebar-accent/20 text-sidebar-foreground/80 transition-all duration-200 hover:border-destructive/50 hover:bg-destructive/15 hover:text-destructive group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
             size="sm"
             variant="outline"
             onClick={handleLogout}

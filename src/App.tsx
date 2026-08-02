@@ -16,7 +16,9 @@ import ManagerSuppliers from "./pages/ManagerSuppliers.tsx";
 import ManagerOmset from "./pages/ManagerOmset.tsx";
 import ManagerFinance from "./pages/ManagerFinance.tsx";
 import ManagerProfitLoss from "./pages/ManagerProfitLoss.tsx";
+import ManagerPayments from "./pages/ManagerPayments.tsx";
 import ManagerAdmins from "./pages/ManagerAdmins.tsx";
+import ManagerWhatsApp from "./pages/ManagerWhatsApp.tsx";
 import KasirDashboard from "./pages/KasirDashboard.tsx";
 import KasirInputNota from "./pages/KasirInputNota.tsx";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -45,8 +47,10 @@ const App = () => (
               <Route path="/manager/omset" element={<RequireAuth role={["manager", "admin"]} requireBranch><ManagerOmset /></RequireAuth>} />
               <Route path="/manager/finance" element={<RequireAuth role={["manager", "admin"]} requireBranch><ManagerFinance /></RequireAuth>} />
               <Route path="/manager/profit-loss" element={<RequireAuth role={["manager", "admin"]} requireBranch><ManagerProfitLoss /></RequireAuth>} />
+              <Route path="/manager/payments" element={<RequireAuth role={["manager", "admin"]} requireBranch><ManagerPayments /></RequireAuth>} />
               <Route path="/manager/cashiers" element={<RequireAuth role={["manager", "admin"]} requireBranch><ManagerCashiers /></RequireAuth>} />
               <Route path="/manager/admins" element={<RequireAuth role="manager" requireBranch><ManagerAdmins /></RequireAuth>} />
+              <Route path="/manager/whatsapp" element={<RequireAuth role="manager" requireBranch><ManagerWhatsApp /></RequireAuth>} />
               <Route path="/kasir" element={<RequireAuth role="kasir"><KasirDashboard /></RequireAuth>} />
               <Route path="/kasir/input" element={<RequireAuth role="kasir"><KasirInputNota /></RequireAuth>} />
               <Route path="*" element={<NotFound />} />

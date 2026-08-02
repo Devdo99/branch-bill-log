@@ -58,6 +58,7 @@ Aplikasi ini menggunakan beberapa tabel utama di PostgreSQL (Supabase):
 - [x] **Manajemen Supplier**: Menyimpan database supplier cabang lengkap dengan nomor rekening bank.
 - [x] **Pencatatan & Analisis Omset**: Grafik visual mingguan/bulanan dari pendapatan harian.
 - [x] **Laporan Keuangan & Arus Kas**: Menyajikan analisis arus kas bersih (net cash flow), diagram area komparasi pemasukan vs pengeluaran harian, ikhtisar laba rugi cabang, serta rincian data rekening bank supplier untuk mempermudah transfer pembayaran hutang.
+- [x] **Laporan Pembayaran**: Menyajikan laporan detail pembayaran/nota terbayar per cabang dengan filter tanggal (tanggal nota atau pembayaran), status bayar, pencarian, dan tombol ekspor langsung ke file Excel (.xlsx).
 - [x] **Manajemen Nota (Invoices)**: 
   - Filter nota berdasarkan rentang tanggal, status pembayaran, dan pencarian supplier.
   - Pembayaran nota (mengubah status dari BELUM ke SUDAH dibayar, memerlukan verifikasi PIN Cabang).
@@ -87,7 +88,7 @@ Aplikasi ini menggunakan beberapa tabel utama di PostgreSQL (Supabase):
 
 ### 🤖 Fase 2: Otomatisasi & Kecerdasan Buatan (Medium-term)
 - [ ] **AI OCR Reader untuk Nota**: Kasir cukup memfoto nota, lalu AI secara otomatis mengekstrak nama supplier, daftar barang, qty, harga satuan, dan total nominal (mengurangi kesalahan input manual).
-- [ ] **Notifikasi WhatsApp / Telegram**:
+- [x] **Notifikasi WhatsApp / Telegram**:
   - Kirim pemberitahuan otomatis ke Manager/Admin ketika kasir menginput nota bernilai besar.
   - Kirim notifikasi bukti bayar ke supplier secara otomatis begitu status nota diubah menjadi `SUDAH` dibayar.
 - [ ] **Integrasi Bank API (Mutasi Rekening)**: Pengecekan otomatis mutasi rekening bank untuk pencocokan pembayaran supplier (jika menggunakan bank yang didukung).
@@ -103,6 +104,8 @@ Aplikasi ini menggunakan beberapa tabel utama di PostgreSQL (Supabase):
 
 | Tanggal | Versi | Perubahan / Update | Keterangan |
 | :--- | :--- | :--- | :--- |
+| 2026-08-02 | `1.5.0` | Laporan Pembayaran & Ekspor Excel | Membuat halaman laporan pembayaran dengan filter tanggal (tanggal nota/bayar) dan status pembayaran, serta ekspor file Excel (.xlsx). |
+| 2026-08-02 | `1.4.0` | Integrasi WhatsApp Gateway Hibrida | Mengembangkan backend Express + Baileys, membuat halaman pengaturan WhatsApp Gateway, dan mengintegrasikan pengiriman pesan di latar belakang dengan fallback wa.me. |
 | 2026-07-06 | `1.3.1` | Perbaikan Bug Tag Penutup HTML | Memperbaiki tag penutup HTML yang tidak lengkap pada berkas KasirDashboard.tsx akibat perubahan visual sebelumnya. |
 | 2026-07-06 | `1.3.0` | Halaman Khusus Laporan Laba Rugi | Membuat berkas ManagerProfitLoss, mereset perutean di App.tsx dan sidebar, mengintegrasikan ringkasan pendapatan harian vs total pengeluaran nota supplier, analisis kontribusi biaya supplier, serta ekspor PDF laporan resmi. |
 | 2026-07-06 | `1.2.3` | Desain Ulang PNG Ikon Aplikasi PWA | Menggenerasi gambar 3D berestetika BCA melalui AI dan mengonversinya ke semua resolusi ikon PNG aplikasi (512px, 192px, maskable, apple-touch-icon) untuk standarisasi aplikasi seluler/PWA. |

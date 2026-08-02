@@ -47,14 +47,15 @@
     --shadow-elegant: 0 8px 24px hsl(212 50% 12% / 0.06);
     --shadow-card: 0 1px 2px hsl(212 50% 12% / 0.04), 0 8px 24px hsl(212 50% 12% / 0.03);
     
-    --sidebar-background: 210 100% 12%;
-    --sidebar-foreground: 210 20% 90%;
-    --sidebar-primary: 208 100% 35%;
+    --sidebar-background: 213 100% 10%;
+    --sidebar-foreground: 210 20% 92%;
+    --sidebar-primary: 208 100% 40%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 100% 18%;
+    --sidebar-accent: 210 100% 16%;
     --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 210 100% 16%;
-    --sidebar-ring: 208 100% 35%;
+    --sidebar-border: 210 100% 15%;
+    --sidebar-ring: 208 100% 45%;
+    --sidebar-glow: 208 100% 58%;
   }
 
   .dark {
@@ -86,14 +87,15 @@
     --input: 210 100% 18%;
     --ring: 209 100% 41%;
     
-    --sidebar-background: 210 100% 8%;
-    --sidebar-foreground: 210 20% 90%;
-    --sidebar-primary: 209 100% 41%;
+    --sidebar-background: 213 100% 8%;
+    --sidebar-foreground: 210 20% 92%;
+    --sidebar-primary: 209 100% 42%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 100% 14%;
+    --sidebar-accent: 210 100% 13%;
     --sidebar-accent-foreground: 214 35% 93%;
-    --sidebar-border: 210 100% 12%;
-    --sidebar-ring: 209 100% 41%;
+    --sidebar-border: 210 100% 11%;
+    --sidebar-ring: 209 100% 45%;
+    --sidebar-glow: 209 100% 60%;
   }
 }
 
@@ -131,6 +133,18 @@
 @layer components {
   .app-chip {
     @apply inline-flex items-center gap-1.5 rounded-md border bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground;
+  }
+
+  .app-sidebar-bg {
+    background-color: hsl(var(--sidebar-background));
+    background-image:
+      radial-gradient(1100px 420px at 100% -10%, hsl(var(--sidebar-glow) / 0.14), transparent 60%),
+      linear-gradient(180deg, hsl(var(--sidebar-background)) 0%, hsl(213 100% 7%) 100%);
+  }
+
+  /* Biarkan gradien sidebar terlihat: elemen dalam tidak boleh menutup latar */
+  .app-sidebar-bg [data-sidebar="sidebar"] {
+    background-color: transparent;
   }
 
   .app-card {

@@ -10,8 +10,10 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { Search, FileDown, Image as ImgIcon, MessageCircle, Eye, ZoomIn, ZoomOut, RotateCw, Pencil, Trash2, Filter, Receipt, Wallet, CheckCircle2, Clock, Settings2, RotateCcw, Archive, ListChecks, Send } from "lucide-react";
+import { Search, FileDown, Image as ImgIcon, MessageCircle, Eye, ZoomIn, ZoomOut, RotateCw, Pencil, Trash2, Receipt, Wallet, CheckCircle2, Clock, Settings2, RotateCcw, Archive, ListChecks, Send, Loader2, SlidersHorizontal, AlertCircle, Calendar as CalendarIcon, ChevronDown } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -19,6 +21,16 @@ import {
 } from "@/components/ui/alert-dialog";
 import jsPDF from "jspdf";
 import JSZip from "jszip";
+import type { DateRange } from "react-day-picker";
+
+// Format tanggal lokal (hindari shift timezone UTC pada .toISOString())
+const toISODate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+const parseDate = (s: string) => {
+  const [y, m, d] = s.split("-").map(Number);
+  return new Date(y || 2000, (m || 1) - 1, d || 1);
+};
 
 const DEFAULT_WA_TEMPLATE = `*Laporan Nota — {cabang}*
 Periode: {periode}
@@ -111,11 +123,11 @@ export default function ManagerInvoices() {
   const [status, setStatus] = useState<"all" | "BELUM" | "SUDAH">("all");
   const [from, setFrom] = useState(() => {
     const n = new Date();
-    return new Date(n.getFullYear(), n.getMonth(), 1).toISOString().slice(0, 10);
+    return toISODate(new Date(n.getFullYear(), n.getMonth(), 1));
   });
   const [to, setTo] = useState(() => {
     const n = new Date();
-    return new Date(n.getFullYear(), n.getMonth() + 1, 0).toISOString().slice(0, 10);
+    return toISODate(new Date(n.getFullYear(), n.getMonth() + 1, 0));
   });
   const [detail, setDetail] = useState<Inv | null>(null);
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
@@ -148,6 +160,28 @@ export default function ManagerInvoices() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [downloading, setDownloading] = useState(false);
 
+  // Bulk payment state
+  const [bulkPayOpen, setBulkPayOpen] = useState(false);
+  const [bulkPayDate, setBulkPayDate] = useState("");
+  const [bulkPayTotal, setBulkPayTotal] = useState(0);
+  const [confirmingBulkPay, setConfirmingBulkPay] = useState(false);
+
+  // Rentang tanggal via kalender (mode range)
+  const selectedRange: DateRange | undefined = useMemo(() => {
+    if (!from && !to) return undefined;
+    return { from: from ? parseDate(from) : undefined, to: to ? parseDate(to) : undefined };
+  }, [from, to]);
+
+  const handleRangeSelect = (range: DateRange | undefined) => {
+    if (!range?.from) {
+      setFrom("");
+      setTo("");
+      return;
+    }
+    setFrom(toISODate(range.from));
+    setTo(range.to ? toISODate(range.to) : toISODate(range.from));
+  };
+
   const load = useCallback(async () => {
     if (!activeBranchId) return;
     setLoading(true);
@@ -172,15 +206,24 @@ export default function ManagerInvoices() {
       });
   }, [activeBranchId]);
 
-  const filtered = useMemo(() => invs.filter((i) => {
+  // Nota yang lolos filter non-status (dipakai untuk hitungan chip status cepat)
+  const baseFiltered = useMemo(() => invs.filter((i) => {
     if (supplier && !i.supplier.toLowerCase().includes(supplier.toLowerCase())) return false;
     if (supplierFilter !== "all" && i.supplier !== supplierFilter) return false;
     if (itemQuery && !i.item_name.toLowerCase().includes(itemQuery.toLowerCase())) return false;
-    if (status !== "all" && i.status !== status) return false;
     if (from && i.invoice_date < from) return false;
     if (to && i.invoice_date > to) return false;
     return true;
-  }), [invs, supplier, supplierFilter, itemQuery, status, from, to]);
+  }), [invs, supplier, supplierFilter, itemQuery, from, to]);
+
+  const filtered = useMemo(() => baseFiltered.filter((i) => status === "all" || i.status === status), [baseFiltered, status]);
+
+  // Hitungan per status untuk chip filter cepat
+  const statusCounts = useMemo(() => ({
+    all: baseFiltered.length,
+    BELUM: baseFiltered.filter((i) => i.status === "BELUM").length,
+    SUDAH: baseFiltered.filter((i) => i.status === "SUDAH").length,
+  }), [baseFiltered]);
 
   const allFilteredSelected = filtered.length > 0 && filtered.every((i) => selected.has(i.id));
   const toggleSelect = (id: string) => {
@@ -203,6 +246,8 @@ export default function ManagerInvoices() {
   const totalFiltered = filtered.reduce((s, i) => s + Number(i.total), 0);
   const paidTotal = filtered.filter((i) => i.status === "SUDAH").reduce((s, i) => s + Number(i.total), 0);
   const unpaidTotal = filtered.filter((i) => i.status === "BELUM").reduce((s, i) => s + Number(i.total), 0);
+  const paidPct = totalFiltered > 0 ? Math.round((paidTotal / totalFiltered) * 100) : 0;
+  const selectedTotal = filtered.filter((i) => selected.has(i.id)).reduce((s, i) => s + Number(i.total), 0);
 
   const togglePaid = async (inv: Inv, paid: boolean) => {
     const update = paid
@@ -212,6 +257,37 @@ export default function ManagerInvoices() {
     if (error) return toast.error(error.message);
     toast.success(paid ? "Ditandai TERBAYAR" : "Ditandai BELUM");
     load();
+  };
+
+  const confirmBulkPayment = async () => {
+    if (!bulkPayDate) {
+      return toast.error("Pilih tanggal pembayaran");
+    }
+    setConfirmingBulkPay(true);
+    try {
+      const update = {
+        status: "SUDAH" as const,
+        paid_at: new Date(bulkPayDate).toISOString(),
+        paid_by: user!.id
+      };
+      
+      const ids = Array.from(selected);
+      const { error } = await supabase
+        .from("invoices")
+        .update(update)
+        .in("id", ids);
+
+      if (error) throw error;
+      
+      toast.success(`${selected.size} nota berhasil divalidasi terbayar!`);
+      setSelected(new Set());
+      setBulkPayOpen(false);
+      load();
+    } catch (e: any) {
+      toast.error(e.message || "Gagal memproses pembayaran");
+    } finally {
+      setConfirmingBulkPay(false);
+    }
   };
 
   const openEdit = (inv: Inv) => {
@@ -382,7 +458,7 @@ export default function ManagerInvoices() {
     setWaText(buildText(rows));
     setWaOpen(true);
   };
-  const sendWhatsApp = () => {
+  const sendWhatsApp = async () => {
     localStorage.setItem("wa_phone", waPhone);
     localStorage.setItem("wa_mode", waMode);
     localStorage.setItem("wa_template", waTemplate);
@@ -395,11 +471,38 @@ export default function ManagerInvoices() {
     localStorage.setItem("wa_totals_line", waTotalsLine);
     localStorage.setItem("wa_sup_main", waSupMain);
     localStorage.setItem("wa_sup_line", waSupLine);
+    
     const phone = waPhone.replace(/\D/g, "");
-    const url = phone
+    const fallbackUrl = phone
       ? `https://wa.me/${phone}?text=${encodeURIComponent(waText)}`
       : `https://wa.me/?text=${encodeURIComponent(waText)}`;
-    window.open(url, "_blank");
+
+    try {
+      const statusRes = await fetch("http://localhost:5000/api/status").catch(() => null);
+      if (statusRes && statusRes.ok) {
+        const statusData = await statusRes.json();
+        if (statusData.status === "connected") {
+          const loadingToast = toast.loading("Mengirim pesan WhatsApp via Gateway...");
+          const sendRes = await fetch("http://localhost:5000/api/send-message", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phone, message: waText })
+          });
+          const sendData = await sendRes.json();
+          toast.dismiss(loadingToast);
+          if (sendRes.ok && sendData.success) {
+            toast.success("Pesan terkirim via WhatsApp Gateway!");
+            setWaOpen(false);
+            return;
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("WhatsApp Gateway offline, falling back to wa.me", err);
+    }
+
+    toast.info("Mengalihkan ke WhatsApp Web (Gateway offline)...");
+    window.open(fallbackUrl, "_blank");
     setWaOpen(false);
   };
 
@@ -432,7 +535,7 @@ export default function ManagerInvoices() {
       .split("{tanggal}").join(new Date().toLocaleDateString("id-ID"));
   };
 
-  const sendPerSupplier = () => {
+  const sendPerSupplier = async () => {
     localStorage.setItem("wa_sup_main", waSupMain);
     localStorage.setItem("wa_sup_line", waSupLine);
     localStorage.setItem("wa_sum_line", waSumLine);
@@ -450,13 +553,46 @@ export default function ManagerInvoices() {
       return toast.error(`Tidak ada nomor HP supplier${missing.length ? ` (${missing.join(", ")})` : ""}`);
     }
     if (missing.length) toast.warning(`Dilewati (tanpa no. HP): ${missing.join(", ")}`);
-    targets.forEach((t, idx) => {
-      const text = buildSupplierMessage(t.name, t.items);
-      const url = `https://wa.me/${t.phone}?text=${encodeURIComponent(text)}`;
-      // sedikit jeda agar browser tidak blokir tab popup beruntun
-      setTimeout(() => window.open(url, "_blank"), idx * 350);
-    });
-    toast.success(`Membuka ${targets.length} chat WhatsApp`);
+
+    let isGatewayConnected = false;
+    try {
+      const statusRes = await fetch("http://localhost:5000/api/status").catch(() => null);
+      if (statusRes && statusRes.ok) {
+        const statusData = await statusRes.json();
+        isGatewayConnected = statusData.status === "connected";
+      }
+    } catch (e) {
+      console.warn("WhatsApp Gateway check failed:", e);
+    }
+
+    if (isGatewayConnected) {
+      const loadingToast = toast.loading(`Mengirim laporan ke ${targets.length} supplier via Gateway...`);
+      let successCount = 0;
+      for (const t of targets) {
+        try {
+          const text = buildSupplierMessage(t.name, t.items);
+          const sendRes = await fetch("http://localhost:5000/api/send-message", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ phone: t.phone, message: text })
+          });
+          if (sendRes.ok) {
+            successCount++;
+          }
+        } catch (e) {
+          console.error(`Gagal mengirim ke ${t.name}:`, e);
+        }
+      }
+      toast.dismiss(loadingToast);
+      toast.success(`Berhasil mengirim ${successCount} dari ${targets.length} laporan via WhatsApp Gateway!`);
+    } else {
+      targets.forEach((t, idx) => {
+        const text = buildSupplierMessage(t.name, t.items);
+        const url = `https://wa.me/${t.phone}?text=${encodeURIComponent(text)}`;
+        setTimeout(() => window.open(url, "_blank"), idx * 350);
+      });
+      toast.info(`Membuka ${targets.length} chat WhatsApp Web (Gateway offline)...`);
+    }
     setWaOpen(false);
   };
 
@@ -528,88 +664,232 @@ export default function ManagerInvoices() {
 
   return (
     <AppShell title={`Nota — ${activeBranch?.name}`}>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+      {/* Statistik premium */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
         <StatCard icon={<Receipt className="h-5 w-5" />} label="Jumlah Nota" value={String(filtered.length)} tone="primary" />
-        <StatCard icon={<Wallet className="h-5 w-5" />} label="Total" value={formatRupiah(totalFiltered)} tone="primary" />
+        <StatCard icon={<Wallet className="h-5 w-5" />} label="Total Tagihan" value={formatRupiah(totalFiltered)} tone="primary" />
         <StatCard icon={<CheckCircle2 className="h-5 w-5" />} label="Sudah Dibayar" value={formatRupiah(paidTotal)} tone="success" />
         <StatCard icon={<Clock className="h-5 w-5" />} label="Belum Dibayar" value={formatRupiah(unpaidTotal)} tone="warning" />
       </div>
 
-      <div className="app-card p-4 grid md:grid-cols-6 gap-3">
-        <div className="md:col-span-6 flex items-center gap-2 text-sm font-semibold text-muted-foreground -mb-1">
-          <Filter className="h-4 w-4" /> Filter
+      {/* Panel filter premium */}
+      <div className="rounded-xl border border-border bg-card p-5 shadow-card mb-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-[hsl(208_100%_35%)] to-[hsl(199_95%_50%)] text-white shadow-[0_2px_10px_hsl(208_100%_45%/0.35)]">
+              <SlidersHorizontal className="h-4 w-4" />
+            </span>
+            <div>
+              <h2 className="text-sm font-semibold text-foreground leading-tight">Filter &amp; Pencarian</h2>
+              <p className="text-xs text-muted-foreground">Saring nota berdasarkan supplier, barang, status, dan rentang tanggal.</p>
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
+            <Receipt className="h-3.5 w-3.5" /> {filtered.length} nota tampil
+          </span>
         </div>
-        <div className="space-y-1.5"><Label>Supplier (daftar)</Label>
-          <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Semua supplier</SelectItem>
-              {supplierOptions.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
-            </SelectContent>
-          </Select>
+        <div className="grid md:grid-cols-6 gap-3 border-t border-border/60 pt-4">
+          <div className="space-y-1.5"><Label className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Supplier (daftar)</Label>
+            <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+              <SelectTrigger className="h-9 rounded-lg"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Semua supplier</SelectItem>
+                {supplierOptions.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5"><Label className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Cari supplier</Label><div className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="h-9 rounded-lg pl-9" placeholder="ketik…" value={supplier} onChange={(e) => setSupplier(e.target.value)} /></div></div>
+          <div className="space-y-1.5"><Label className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Nama Item</Label><div className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="h-9 rounded-lg pl-9" placeholder="cth: beras" value={itemQuery} onChange={(e) => setItemQuery(e.target.value)} /></div></div>
+          <div className="space-y-1.5 col-span-1 md:col-span-2"><Label className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Status</Label>
+            <div className="flex h-9 gap-1 rounded-lg bg-muted p-1 text-xs">
+              {([
+                { v: "all", label: "Semua", n: statusCounts.all, active: "bg-background text-foreground shadow-sm" },
+                { v: "BELUM", label: "Belum", n: statusCounts.BELUM, active: "bg-amber-500 text-white shadow-sm" },
+                { v: "SUDAH", label: "Lunas", n: statusCounts.SUDAH, active: "bg-emerald-600 text-white shadow-sm" },
+              ] as const).map((c) => (
+                <button
+                  key={c.v}
+                  type="button"
+                  onClick={() => setStatus(c.v)}
+                  className={`flex-1 cursor-pointer rounded-md px-2 font-semibold transition-all ${
+                    status === c.v ? c.active : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {c.label} <span className="font-normal opacity-80">({c.n})</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-end"><div className="w-full rounded-lg border border-border bg-muted/40 px-3 py-1.5"><div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Total</div><div className="font-bold text-base text-foreground">{formatRupiah(totalFiltered)}</div></div></div>
         </div>
-        <div className="space-y-1.5"><Label>Cari supplier</Label><div className="relative"><Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-8" placeholder="ketik…" value={supplier} onChange={(e) => setSupplier(e.target.value)} /></div></div>
-        <div className="space-y-1.5"><Label>Nama Item</Label><div className="relative"><Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="pl-8" placeholder="cth: beras" value={itemQuery} onChange={(e) => setItemQuery(e.target.value)} /></div></div>
-        <div className="space-y-1.5"><Label>Status</Label>
-          <Select value={status} onValueChange={(v: any) => setStatus(v)}>
-            <SelectTrigger><SelectValue /></SelectTrigger>
-            <SelectContent><SelectItem value="all">Semua</SelectItem><SelectItem value="BELUM">Belum</SelectItem><SelectItem value="SUDAH">Sudah</SelectItem></SelectContent>
-          </Select>
+
+        {/* Rentang tanggal via kalender range picker */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4">
+          <div className="flex items-center gap-2.5">
+            <Label className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Rentang Tanggal</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5 rounded-lg text-xs h-9">
+                  <CalendarIcon className="h-4 w-4 text-primary" />
+                  {from && to ? `${formatDate(from)} – ${formatDate(to)}` : "Semua Tanggal"}
+                  <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="range"
+                  selected={selectedRange}
+                  onSelect={handleRangeSelect}
+                  numberOfMonths={2}
+                  defaultMonth={from ? parseDate(from) : new Date()}
+                />
+                <div className="flex items-center justify-between gap-2 border-t border-border/70 p-2">
+                  <span className="text-[10px] text-muted-foreground px-1">
+                    {from && to ? `${formatDate(from)} s.d. ${formatDate(to)}` : "Belum ada rentang"}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-[10px] text-muted-foreground hover:text-foreground"
+                    onClick={() => {
+                      setFrom("");
+                      setTo("");
+                    }}
+                  >
+                    Hapus
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
+          </div>
+          <span className="text-xs text-muted-foreground">
+            Menampilkan nota periode{" "}
+            <b className="text-foreground/80">
+              {from && to ? `${formatDate(from)} s.d. ${formatDate(to)}` : "semua tanggal"}
+            </b>
+          </span>
         </div>
-        <div className="space-y-1.5"><Label>Dari</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
-        <div className="space-y-1.5"><Label>Sampai</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
-        <div className="flex items-end"><div className="text-sm w-full"><div className="text-muted-foreground">Total</div><div className="font-semibold text-lg">{formatRupiah(totalFiltered)}</div></div></div>
       </div>
 
-      <div className="flex flex-wrap gap-2 mt-4">
-        <Button variant="outline" onClick={exportPDF}><FileDown className="h-4 w-4 mr-1.5" /> Export PDF</Button>
-        <Button variant="outline" onClick={exportJPG}><ImgIcon className="h-4 w-4 mr-1.5" /> Export JPG</Button>
-        <Button variant="outline" onClick={downloadSelectedPhotos} disabled={downloading}>
-          <Archive className="h-4 w-4 mr-1.5" /> {downloading ? "Mengemas…" : `Unduh Foto ZIP${selected.size > 0 ? ` (${selected.size})` : ""}`}
+      {/* Strip progres pembayaran */}
+      {totalFiltered > 0 && (
+        <div className="mb-5 rounded-xl border border-border bg-card p-4 shadow-card">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
+              <CheckCircle2 className="h-4 w-4 text-success" /> Progres Pembayaran
+            </div>
+            <div className="flex items-center gap-3 text-xs">
+              <span className="text-emerald-600 font-semibold">Lunas {paidPct}%</span>
+              <span className="text-muted-foreground">sisa {formatRupiah(unpaidTotal)}</span>
+            </div>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-[#22c55e] to-[#16a34a] transition-all duration-500"
+              style={{ width: `${paidPct}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Toolbar aksi premium */}
+      <div className="flex flex-wrap gap-2 mb-5">
+        <Button variant="outline" className="h-9 rounded-lg border-border bg-card shadow-sm hover:bg-accent" onClick={exportPDF}><FileDown className="h-4 w-4 mr-1.5 text-primary" /> Export PDF</Button>
+        <Button variant="outline" className="h-9 rounded-lg border-border bg-card shadow-sm hover:bg-accent" onClick={exportJPG}><ImgIcon className="h-4 w-4 mr-1.5 text-primary" /> Export JPG</Button>
+        <Button variant="outline" className="h-9 rounded-lg border-border bg-card shadow-sm hover:bg-accent" onClick={downloadSelectedPhotos} disabled={downloading}>
+          <Archive className="h-4 w-4 mr-1.5 text-primary" /> {downloading ? "Mengemas…" : `Unduh Foto ZIP${selected.size > 0 ? ` (${selected.size})` : ""}`}
         </Button>
-        <Button className="bg-success text-success-foreground hover:bg-success/90" onClick={openWa}><MessageCircle className="h-4 w-4 mr-1.5" /> Kirim WhatsApp</Button>
+        <Button className="h-9 rounded-lg bg-gradient-to-br from-[#22c55e] to-[#16a34a] text-white shadow-[0_2px_12px_hsl(151_62%_40%/0.4)] hover:from-[#16a34a] hover:to-[#15803d]" onClick={openWa}><MessageCircle className="h-4 w-4 mr-1.5" /> Kirim WhatsApp</Button>
         {selected.size > 0 && (
-          <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())} className="ml-auto">
+          <span className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/5 px-3 text-xs font-semibold text-primary">
+            <Receipt className="h-3.5 w-3.5" /> {selected.size} nota · {formatRupiah(selectedTotal)}
+          </span>
+        )}
+        {selected.size > 0 && (
+          <Button 
+            className="h-9 rounded-lg bg-gradient-to-br from-[hsl(208_100%_35%)] to-[hsl(199_95%_50%)] text-white shadow-[0_2px_12px_hsl(208_100%_45%/0.4)] hover:from-[hsl(208_100%_30%)] hover:to-[hsl(199_95%_45%)]" 
+            onClick={() => {
+              const rows = filtered.filter((i) => selected.has(i.id));
+              const totalAmount = rows.reduce((s, x) => s + Number(x.total), 0);
+              setBulkPayTotal(totalAmount);
+              setBulkPayDate(new Date().toISOString().split("T")[0]);
+              setBulkPayOpen(true);
+            }}
+          >
+            <CheckCircle2 className="h-4 w-4 mr-1.5" /> Validasi Pembayaran ({selected.size})
+          </Button>
+        )}
+        {selected.size > 0 && (
+          <Button variant="ghost" size="sm" onClick={() => setSelected(new Set())} className="ml-auto h-9 text-muted-foreground hover:text-foreground">
             Bersihkan pilihan ({selected.size})
           </Button>
         )}
       </div>
 
-      <div id="invoice-table-export" className="app-table mt-4">
+      {/* Tabel premium */}
+      <div id="invoice-table-export" className="overflow-hidden rounded-xl border border-border bg-card shadow-card">
+        <div className="flex items-center justify-between border-b border-border/70 bg-gradient-to-r from-muted/60 to-transparent px-4 py-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Receipt className="h-4 w-4 text-primary" /> Daftar Nota
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {selected.size > 0 ? <span className="font-semibold text-primary">{selected.size} terpilih</span> : `${filtered.length} nota`}
+          </span>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-muted text-left">
-              <tr>
+            <thead className="bg-muted/50 text-left">
+              <tr className="text-[11px] uppercase tracking-wider text-muted-foreground">
                 <th className="p-3 w-8"><Checkbox checked={allFilteredSelected} onCheckedChange={toggleSelectAll} aria-label="Pilih semua" /></th>
                 <th className="p-3">Bayar</th><th className="p-3">Tanggal</th><th className="p-3">Supplier</th>
                 <th className="p-3">Barang</th><th className="p-3 text-right">Qty</th><th className="p-3 text-right">Harga</th>
-                <th className="p-3 text-right">Total</th><th className="p-3">Status</th><th className="p-3"></th>
+                <th className="p-3 text-right">Total</th><th className="p-3">Status</th><th className="p-3">Tgl Bayar</th><th className="p-3 text-right">Aksi</th>
               </tr>
             </thead>
             <tbody>
-              {loading ? <tr><td colSpan={10} className="p-6 text-center text-muted-foreground">Memuat…</td></tr>
-               : filtered.length === 0 ? <tr><td colSpan={10} className="p-6 text-center text-muted-foreground">Tidak ada nota</td></tr>
-               : filtered.map((i) => (
-                <tr key={i.id} className={`border-t hover:bg-muted/40 transition-colors ${selected.has(i.id) ? "bg-primary/5" : ""}`}>
+              {loading ? (
+                <tr>
+                  <td colSpan={11} className="p-10">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <Loader2 className="h-7 w-7 animate-spin text-primary" />
+                      <p className="text-sm">Memuat nota…</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={11} className="p-10">
+                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                      <AlertCircle className="h-8 w-8 text-muted-foreground/50" />
+                      <p className="text-sm font-medium text-foreground">Tidak ada nota</p>
+                      <p className="text-xs">Coba ubah filter atau rentang tanggal.</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : filtered.map((i) => (
+                <tr key={i.id} className={`border-t border-border/60 transition-colors hover:bg-primary/[0.03] ${selected.has(i.id) ? "bg-primary/5" : ""}`}>
                   <td className="p-3"><Checkbox checked={selected.has(i.id)} onCheckedChange={() => toggleSelect(i.id)} aria-label="Pilih nota" /></td>
-                  <td className="p-3"><Checkbox checked={i.status === "SUDAH"} onCheckedChange={(v) => togglePaid(i, !!v)} /></td>
-                  <td className="p-3 whitespace-nowrap">{formatDate(i.invoice_date)}</td>
-                  <td className="p-3">{i.supplier}</td>
-                  <td className="p-3">{i.item_name}</td>
-                  <td className="p-3 text-right">{i.qty}</td>
-                  <td className="p-3 text-right">{formatRupiah(Number(i.price))}</td>
-                  <td className="p-3 text-right font-semibold">{formatRupiah(Number(i.total))}</td>
+                  <td className="p-3"><Checkbox checked={i.status === "SUDAH"} onCheckedChange={(v) => togglePaid(i, !!v)} title="Tandai lunas / belum bayar" /></td>
+                  <td className="p-3 whitespace-nowrap font-medium">{formatDate(i.invoice_date)}</td>
+                  <td className="p-3 font-semibold text-foreground/90">{i.supplier}</td>
+                  <td className="p-3 text-foreground/80">{i.item_name}</td>
+                  <td className="p-3 text-right tabular-nums text-muted-foreground">{i.qty}</td>
+                  <td className="p-3 text-right tabular-nums text-muted-foreground">{formatRupiah(Number(i.price))}</td>
+                  <td className="p-3 text-right font-bold tabular-nums">{formatRupiah(Number(i.total))}</td>
                   <td className="p-3">
-                    <span className={`status-pill inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold border ${i.status === "SUDAH" ? "bg-emerald-50 text-emerald-700 border-emerald-200/50" : "bg-amber-50 text-amber-800 border-amber-200/50"}`}>
+                    <span className={`status-pill inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${i.status === "SUDAH" ? "bg-emerald-50 text-emerald-700 border-emerald-200/50" : "bg-amber-50 text-amber-800 border-amber-200/50"}`}>
                       {i.status === "SUDAH" ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
-                      {i.status}
+                      {i.status === "SUDAH" ? "Lunas" : "Belum"}
                     </span>
+                  </td>
+                  <td className="p-3 whitespace-nowrap text-xs text-muted-foreground">
+                    {i.paid_at ? formatDate(i.paid_at) : "—"}
                   </td>
                   <td className="p-3">
                     <div className="flex items-center justify-end gap-1">
-                      <Button size="icon" variant="ghost" title="Detail" onClick={() => openDetail(i)}><Eye className="h-4 w-4" /></Button>
-                      <Button size="icon" variant="ghost" title="Edit nota" onClick={() => openEdit(i)}><Pencil className="h-4 w-4" /></Button>
-                      <Button size="icon" variant="ghost" title="Hapus" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => setDeleting(i)}><Trash2 className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="ghost" title="Detail" className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary" onClick={() => openDetail(i)}><Eye className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="ghost" title="Edit nota" className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary" onClick={() => openEdit(i)}><Pencil className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="ghost" title="Hapus" className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => setDeleting(i)}><Trash2 className="h-4 w-4" /></Button>
                     </div>
                   </td>
                 </tr>
@@ -871,6 +1151,55 @@ export default function ManagerInvoices() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={bulkPayOpen} onOpenChange={setBulkPayOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-emerald-600">
+              <CheckCircle2 className="h-5 w-5" /> Validasi Pembayaran Sekaligus
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="rounded-lg border bg-muted/30 p-4 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Jumlah Nota Terpilih:</span>
+                <span className="font-semibold">{selected.size} nota</span>
+              </div>
+              <div className="flex justify-between border-t pt-2">
+                <span className="text-muted-foreground font-semibold">Total Pembayaran:</span>
+                <span className="font-bold text-emerald-600 text-base">{formatRupiah(bulkPayTotal)}</span>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="bulk_pay_date">Tanggal Nota Terbayar</Label>
+              <Input
+                id="bulk_pay_date"
+                type="date"
+                value={bulkPayDate}
+                onChange={(e) => setBulkPayDate(e.target.value)}
+                required
+              />
+              <p className="text-[11px] text-muted-foreground">
+                Tentukan tanggal transaksi pembayaran ini terjadi (misal tanggal transfer bank).
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setBulkPayOpen(false)}>
+                Batal
+              </Button>
+              <Button 
+                onClick={confirmBulkPayment} 
+                disabled={confirmingBulkPay}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              >
+                {confirmingBulkPay ? "Memproses…" : "Konfirmasi & Tandai Lunas"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }
@@ -880,13 +1209,21 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
 }
 
 function StatCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: "primary" | "success" | "warning" }) {
-  const toneCls = tone === "success" ? "bg-success/10 text-success" : tone === "warning" ? "bg-warning/15 text-warning-foreground" : "bg-primary/10 text-primary";
+  const toneCls =
+    tone === "success"
+      ? "from-[#22c55e] to-[#16a34a] shadow-[0_4px_14px_hsl(151_62%_40%/0.35)]"
+      : tone === "warning"
+        ? "from-[#f59e0b] to-[#d97706] shadow-[0_4px_14px_hsl(38_92%_50%/0.35)]"
+        : "from-[hsl(208_100%_35%)] to-[hsl(199_95%_50%)] shadow-[0_4px_14px_hsl(208_100%_45%/0.35)]";
   return (
-    <div className="app-card p-3 flex items-center gap-3">
-      <div className={`h-10 w-10 grid place-items-center rounded-lg ${toneCls}`}>{icon}</div>
-      <div className="min-w-0">
-        <div className="text-xs text-muted-foreground truncate">{label}</div>
-        <div className="font-semibold text-base truncate">{value}</div>
+    <div className="group relative overflow-hidden rounded-xl border border-border bg-card p-4 shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_hsl(212_50%_12%/0.1)]">
+      <div className={`pointer-events-none absolute -right-6 -top-8 h-20 w-20 rounded-full bg-gradient-to-br opacity-15 blur-2xl transition-opacity group-hover:opacity-30 ${toneCls.split(" ")[0]}`} />
+      <div className="flex items-center gap-3">
+        <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br text-white ${toneCls}`}>{icon}</div>
+        <div className="min-w-0">
+          <div className="truncate text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
+          <div className="truncate text-lg font-bold text-foreground">{value}</div>
+        </div>
       </div>
     </div>
   );
