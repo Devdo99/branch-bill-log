@@ -18,8 +18,8 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     {
       name: 'spawn-whatsapp-gateway',
-      configureServer(server) {
-        server.middlewares.use((req, res, next) => {
+      configureServer(server: any) {
+        server.middlewares.use((req: any, res: any, next: any) => {
           if (req.url === '/api/spawn-whatsapp') {
             try {
               const batPath = path.resolve(__dirname, 'start_whatsapp_only.bat');
