@@ -4,7 +4,7 @@ import { useBranch } from "@/contexts/BranchContext";
 import { supabase } from "@/integrations/supabase/client";
 import { formatRupiah, formatRupiahCompact } from "@/lib/format";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, CartesianGrid, ComposedChart, Area } from "recharts";
-import { TrendingUp, AlertCircle, CheckCircle2, Receipt, Package, Truck, Building2, Crown, Calendar, Wallet, BarChart3, LineChart as LineIcon, Coins, Percent, ArrowUpRight, ArrowDownRight, Scale, FilePlus2, ListChecks } from "lucide-react";
+import { TrendingUp, AlertCircle, AlertTriangle, CheckCircle2, Receipt, Package, Truck, Building2, Crown, Calendar, Wallet, BarChart3, LineChart as LineIcon, Coins, Percent, ArrowUpRight, ArrowDownRight, Scale, FilePlus2, ListChecks } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -115,6 +115,12 @@ export default function ManagerDashboard() {
   const sudahTotal = branchInv.filter((i) => i.status === "SUDAH").reduce((s, i) => s + Number(i.total), 0);
   const overdueTotal = branchInv.filter((i) => i.status === "BELUM" && i.invoice_date < today).reduce((s, i) => s + Number(i.total), 0);
   const paidPct = bahanTotal > 0 ? (sudahTotal / bahanTotal) * 100 : 0;
+
+  // Peringatan: semua nota belum bayar & lewat jatuh tempo di cabang ini (tidak terpengaruh filter periode, agar tidak "hilang" saat ganti periode)
+  const branchUnpaid = allInv.filter((i) => i.branch_id === activeBranch?.id && i.status === "BELUM");
+  const branchUnpaidTotal = branchUnpaid.reduce((s, i) => s + Number(i.total), 0);
+  const branchOverdue = branchUnpaid.filter((i) => i.invoice_date < today);
+  const branchOverdueTotal = branchOverdue.reduce((s, i) => s + Number(i.total), 0);
   const avgInvoice = branchInv.length ? bahanTotal / branchInv.length : 0;
   const uniqueItems = new Set(branchInv.map((i) => i.item_name.trim().toLowerCase())).size;
   const uniqueSuppliers = new Set(branchInv.map((i) => i.supplier.trim().toLowerCase())).size;
@@ -330,6 +336,41 @@ export default function ManagerDashboard() {
           <div className="text-xs text-muted-foreground">Periode aktif: <b>{from || "?"}</b> s/d <b>{to || "?"}</b></div>
         )}
       </div>
+
+      {/* Peringatan nota belum dibayar / lewat jatuh tempo (semua periode, tidak terpengaruh filter) */}
+      {branchUnpaid.length > 0 && (
+        <div className={`mb-4 overflow-hidden rounded-xl border shadow-card ${branchOverdue.length > 0 ? "border-destructive/40 bg-gradient-to-r from-destructive/10 via-card to-card" : "border-warning/50 bg-gradient-to-r from-warning/10 via-card to-card"}`}>
+          <div className="flex flex-wrap items-center gap-3 p-4">
+            <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg text-white shadow-md ${branchOverdue.length > 0 ? "bg-gradient-to-br from-red-600 to-red-500" : "bg-gradient-to-br from-amber-500 to-orange-500"}`}>
+              <AlertTriangle className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm font-semibold text-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                  <AlertCircle className="h-4 w-4 text-warning" /> {branchUnpaid.length} nota belum dibayar
+                </span>
+                <span className="text-muted-foreground">•</span>
+                <span className="tabular-nums text-warning-foreground">{formatRupiah(branchUnpaidTotal)}</span>
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {branchOverdue.length > 0 ? (
+                  <span className="font-medium text-destructive">
+                    ⚠ {branchOverdue.length} di antaranya lewat jatuh tempo ({formatRupiah(branchOverdueTotal)}) — segera tindak lanjuti.
+                  </span>
+                ) : (
+                  <span>Belum dibayar (semua periode). Tandai lunas setelah pembayaran dilakukan.</span>
+                )}
+              </div>
+            </div>
+            <Link
+              to="/manager/invoices"
+              className="inline-flex h-9 items-center gap-2 rounded-lg bg-gradient-to-br from-red-600 to-red-500 px-4 text-sm font-semibold text-white shadow-[0_2px_12px_hsl(0_70%_45%/0.35)] hover:from-red-500 hover:to-red-600"
+            >
+              <ListChecks className="h-4 w-4" /> Cek nota sekarang
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-4 xl:grid-cols-[1.35fr_0.65fr]">
         <div className="app-card overflow-hidden border-primary/20">

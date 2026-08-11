@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { Search, FileDown, Image as ImgIcon, MessageCircle, Eye, ZoomIn, ZoomOut, RotateCw, Pencil, Trash2, Receipt, Wallet, CheckCircle2, Clock, Settings2, RotateCcw, Archive, ListChecks, Send, Loader2, SlidersHorizontal, AlertCircle, Calendar as CalendarIcon, ChevronDown } from "lucide-react";
+import { Search, FileDown, FileSpreadsheet, Image as ImgIcon, MessageCircle, Eye, ZoomIn, ZoomOut, RotateCw, Pencil, Trash2, Receipt, Wallet, CheckCircle2, Clock, Settings2, RotateCcw, Archive, ListChecks, RefreshCw, Users, Send, Loader2, AlertCircle, AlertTriangle, Calendar as CalendarIcon, ChevronDown, Plus, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import jsPDF from "jspdf";
 import JSZip from "jszip";
+import * as XLSX from "xlsx";
 import type { DateRange } from "react-day-picker";
 
 // Format tanggal lokal (hindari shift timezone UTC pada .toISOString())
@@ -46,6 +47,17 @@ Rincian:
 
 *Rekening Supplier (Belum Dibayar):*
 {rekening}`;
+
+// Template ringkas: hanya total pembayaran (tanpa rincian per item/supplier)
+// Variabel: {cabang} {periode} {tanggal} {jumlah} {total} {sudah} {belum}
+const DEFAULT_TOTAL_TEMPLATE = `*Rekap Pembayaran — {cabang}*
+Periode: {periode}
+Tanggal kirim: {tanggal}
+
+Jumlah nota: {jumlah}
+Total tagihan: *{total}*
+Sudah dibayar: {sudah}
+Belum dibayar: {belum}`;
 
 // Format per kelompok supplier di dalam {rincian}
 // Variabel: {supplier} {jumlah} {subtotal} {items}
@@ -144,9 +156,15 @@ export default function ManagerInvoices() {
   const [deleting, setDeleting] = useState<Inv | null>(null);
   const [waOpen, setWaOpen] = useState(false);
   const [waPhone, setWaPhone] = useState<string>(() => localStorage.getItem("wa_phone") ?? "");
-  const [waMode, setWaMode] = useState<"rincian" | "ringkasan" | "gabungan">(() => (localStorage.getItem("wa_mode") as any) ?? "rincian");
+  const [waMode, setWaMode] = useState<"rincian" | "total" | "ringkasan" | "gabungan">(() => (localStorage.getItem("wa_mode") as any) ?? "rincian");
   const [waUseSelected, setWaUseSelected] = useState(false);
+  const [waUseMedia, setWaUseMedia] = useState<boolean>(() => localStorage.getItem("wa_use_media") === "true");
+  const [waGroupMode, setWaGroupMode] = useState<boolean>(() => localStorage.getItem("wa_group_mode") === "true");
+  const [waGroups, setWaGroups] = useState<{ id: string; name: string }[]>([]);
+  const [waGroupId, setWaGroupId] = useState<string>(() => localStorage.getItem("wa_group_id") ?? "");
+  const [waLaptopImages, setWaLaptopImages] = useState<{ name: string; dataUrl: string }[]>([]);
   const [waTemplate, setWaTemplate] = useState<string>(() => localStorage.getItem("wa_template") ?? DEFAULT_WA_TEMPLATE);
+  const [waTotTpl, setWaTotTpl] = useState<string>(() => localStorage.getItem("wa_total_tpl") ?? DEFAULT_TOTAL_TEMPLATE);
   const [waGroupTpl, setWaGroupTpl] = useState<string>(() => localStorage.getItem("wa_group_tpl") ?? DEFAULT_GROUP_TEMPLATE);
   const [waItemTpl, setWaItemTpl] = useState<string>(() => localStorage.getItem("wa_item_tpl") ?? DEFAULT_ITEM_TEMPLATE);
   const [waSumMain, setWaSumMain] = useState<string>(() => localStorage.getItem("wa_sum_main") ?? DEFAULT_SUM_MAIN);
@@ -247,7 +265,18 @@ export default function ManagerInvoices() {
   const paidTotal = filtered.filter((i) => i.status === "SUDAH").reduce((s, i) => s + Number(i.total), 0);
   const unpaidTotal = filtered.filter((i) => i.status === "BELUM").reduce((s, i) => s + Number(i.total), 0);
   const paidPct = totalFiltered > 0 ? Math.round((paidTotal / totalFiltered) * 100) : 0;
+
+  // Peringatan: nota belum bayar & lewat jatuh tempo (mengikuti filter non-status, agar selalu tampil walau tab status sedang "Lunas")
+  const todayIso = toISODate(new Date());
+  const unpaidRows = baseFiltered.filter((i) => i.status === "BELUM");
+  const unpaidRowsTotal = unpaidRows.reduce((s, i) => s + Number(i.total), 0);
+  const overdueRows = unpaidRows.filter((i) => i.invoice_date < todayIso);
+  const overdueTotal = overdueRows.reduce((s, i) => s + Number(i.total), 0);
   const selectedTotal = filtered.filter((i) => selected.has(i.id)).reduce((s, i) => s + Number(i.total), 0);
+
+  // Sumber data untuk pesan WA (semua hasil filter / hanya terpilih) + jumlah foto yang bisa dilampirkan
+  const waSourceRows = waUseSelected && selected.size > 0 ? filtered.filter((i) => selected.has(i.id)) : filtered;
+  const waPhotoCount = waSourceRows.filter((i) => i.photo_path).length;
 
   const togglePaid = async (inv: Inv, paid: boolean) => {
     const update = paid
@@ -442,6 +471,9 @@ export default function ManagerInvoices() {
       .split("{total_per_supplier}").join(totalPerSupplier);
     const rincian = buildRincian(rows) || "(tidak ada nota)";
     const ringkasan = buildRingkasan(rows) || "(tidak ada nota)";
+    if (waMode === "total") {
+      return tplVars(waTotTpl);
+    }
     if (waMode === "ringkasan") {
       return tplVars(waSumMain).split("{ringkasan}").join(ringkasan);
     }
@@ -453,15 +485,70 @@ export default function ManagerInvoices() {
     return tplVars(waTemplate).split("{rincian}").join(rincian);
   };
 
+  const loadGroups = async () => {
+    try {
+      const res = await fetch("http://localhost:5000/api/groups").catch(() => null);
+      if (!res || !res.ok) {
+        setWaGroups([]);
+        return;
+      }
+      const data = await res.json();
+      const list: { id: string; name: string }[] = data.groups ?? [];
+      setWaGroups(list);
+      // Pertahankan pilihan jika grup masih ada; jika daftar kosong/grup tak ada lagi, kosongkan agar user memilih ulang
+      if (list.length === 0 || (waGroupId && !list.some((g) => g.id === waGroupId))) setWaGroupId("");
+    } catch (e) {
+      console.warn("Gagal memuat daftar grup:", e);
+      setWaGroups([]);
+    }
+  };
+
+  // Pilih beberapa gambar dari laptop -> diubah menjadi data URI base64 (dikap 30)
+  const handleAddLaptopImages = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const allFiles = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (allFiles.length === 0) return;
+    const files = allFiles.filter((f) => f.type.startsWith("image/"));
+    if (files.length < allFiles.length) {
+      toast.info(`${allFiles.length - files.length} file dilewati (bukan gambar)`);
+    }
+    if (files.length === 0) return;
+    const readers = files.map(
+      (f) =>
+        new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = () => reject(new Error("Gagal membaca gambar"));
+          reader.readAsDataURL(f);
+        })
+    );
+    // Pakai allSettled: file yang gagal dibaca dilewati, sisanya tetap dipakai
+    Promise.allSettled(readers).then((results) => {
+      const ok: { name: string; dataUrl: string }[] = [];
+      results.forEach((r, i) => {
+        if (r.status === "fulfilled") ok.push({ name: files[i].name, dataUrl: r.value });
+      });
+      if (ok.length === 0) {
+        toast.error("Tidak ada gambar yang bisa dibaca");
+        return;
+      }
+      setWaLaptopImages((prev) => [...prev, ...ok].slice(0, 30));
+    });
+  };
+
   const openWa = () => {
     const rows = waUseSelected && selected.size > 0 ? filtered.filter((i) => selected.has(i.id)) : filtered;
     setWaText(buildText(rows));
     setWaOpen(true);
+    // Preload daftar grup bila gateway aktif
+    loadGroups();
   };
+
   const sendWhatsApp = async () => {
     localStorage.setItem("wa_phone", waPhone);
     localStorage.setItem("wa_mode", waMode);
     localStorage.setItem("wa_template", waTemplate);
+    localStorage.setItem("wa_total_tpl", waTotTpl);
     localStorage.setItem("wa_group_tpl", waGroupTpl);
     localStorage.setItem("wa_item_tpl", waItemTpl);
     localStorage.setItem("wa_sum_main", waSumMain);
@@ -471,39 +558,105 @@ export default function ManagerInvoices() {
     localStorage.setItem("wa_totals_line", waTotalsLine);
     localStorage.setItem("wa_sup_main", waSupMain);
     localStorage.setItem("wa_sup_line", waSupLine);
-    
-    const phone = waPhone.replace(/\D/g, "");
-    const fallbackUrl = phone
-      ? `https://wa.me/${phone}?text=${encodeURIComponent(waText)}`
-      : `https://wa.me/?text=${encodeURIComponent(waText)}`;
+    localStorage.setItem("wa_use_media", String(waUseMedia));
+    localStorage.setItem("wa_group_mode", String(waGroupMode));
+    if (waGroupId) localStorage.setItem("wa_group_id", waGroupId);
 
+    const phone = waPhone.replace(/\D/g, "");
+    if (waGroupMode && !waGroupId) return toast.error("Pilih grup WhatsApp tujuan");
+
+    // Kumpulkan foto nota (signed URL dari storage) bila diminta
+    const media: string[] = [];
+    if (waUseMedia) {
+      const withPhoto = waSourceRows.filter((i) => i.photo_path);
+      for (const inv of withPhoto) {
+        try {
+          const { data } = await supabase.storage.from("nota-photos").createSignedUrl(inv.photo_path!, 3600);
+          if (data?.signedUrl) media.push(data.signedUrl);
+        } catch (e) {
+          console.warn("Gagal membuat signed URL foto:", e);
+        }
+      }
+    }
+    // Tambahkan gambar yang dipilih manual dari laptop (data URI base64)
+    waLaptopImages.forEach((img) => media.push(img.dataUrl));
+
+    const needsGateway = waGroupMode || media.length > 0;
+
+    let isGatewayConnected = false;
     try {
       const statusRes = await fetch("http://localhost:5000/api/status").catch(() => null);
       if (statusRes && statusRes.ok) {
         const statusData = await statusRes.json();
-        if (statusData.status === "connected") {
-          const loadingToast = toast.loading("Mengirim pesan WhatsApp via Gateway...");
-          const sendRes = await fetch("http://localhost:5000/api/send-message", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ phone, message: waText })
-          });
-          const sendData = await sendRes.json();
-          toast.dismiss(loadingToast);
-          if (sendRes.ok && sendData.success) {
-            toast.success("Pesan terkirim via WhatsApp Gateway!");
-            setWaOpen(false);
-            return;
-          }
-        }
+        isGatewayConnected = statusData.status === "connected";
       }
     } catch (err) {
-      console.warn("WhatsApp Gateway offline, falling back to wa.me", err);
+      console.warn("WhatsApp Gateway check failed:", err);
     }
 
-    toast.info("Mengalihkan ke WhatsApp Web (Gateway offline)...");
-    window.open(fallbackUrl, "_blank");
-    setWaOpen(false);
+    if (!isGatewayConnected) {
+      if (needsGateway) {
+        return toast.error(
+          waGroupMode
+            ? "Kirim ke grup memerlukan WhatsApp Gateway aktif."
+            : "Mengirim foto nota memerlukan WhatsApp Gateway aktif."
+        );
+      }
+      // Fallback wa.me hanya untuk teks biasa ke nomor HP
+      const fallbackUrl = phone
+        ? `https://wa.me/${phone}?text=${encodeURIComponent(waText)}`
+        : `https://wa.me/?text=${encodeURIComponent(waText)}`;
+      toast.info("Mengalihkan ke WhatsApp Web (Gateway offline)...");
+      window.open(fallbackUrl, "_blank");
+      setWaOpen(false);
+      return;
+    }
+
+    const loadingToast = toast.loading(
+      waGroupMode
+        ? "Mengirim ke grup WhatsApp..."
+        : media.length > 0
+          ? `Mengirim pesan + ${media.length} foto...`
+          : "Mengirim pesan WhatsApp..."
+    );
+    try {
+      const payload: any = { message: waText, media };
+      if (waGroupMode) payload.jid = waGroupId;
+      else payload.phone = phone;
+
+      const sendRes = await fetch("http://localhost:5000/api/send-message", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const sendData = await sendRes.json().catch(() => ({}));
+      toast.dismiss(loadingToast);
+      if (sendRes.ok && sendData.success) {
+        toast.success(
+          waGroupMode
+            ? "Pesan terkirim ke grup WhatsApp!"
+            : media.length > 0
+              ? `Pesan + ${media.length} foto terkirim!`
+              : "Pesan terkirim via WhatsApp Gateway!"
+        );
+        setWaOpen(false);
+        return;
+      }
+      if (needsGateway) {
+        toast.error("Gagal mengirim: " + (sendData.error || "Terjadi kesalahan"));
+        return;
+      }
+      // Fallback wa.me jika gateway gagal mengirim teks biasa
+      const fallbackUrl = phone
+        ? `https://wa.me/${phone}?text=${encodeURIComponent(waText)}`
+        : `https://wa.me/?text=${encodeURIComponent(waText)}`;
+      toast.info("Mengalihkan ke WhatsApp Web (Gateway offline)...");
+      window.open(fallbackUrl, "_blank");
+      setWaOpen(false);
+    } catch (err: any) {
+      toast.dismiss(loadingToast);
+      toast.error("Gagal mengirim: " + (err?.message || err));
+    }
   };
 
   const sanitize = (s: string) => s.replace(/[\\/:*?"<>|]+/g, "_").slice(0, 80);
@@ -662,140 +815,235 @@ export default function ManagerInvoices() {
     a.click();
   };
 
+  // Export ke Excel: Sheet 1 = Detail Nota, Sheet 2 = Ringkasan per Supplier (mengikuti filter aktif)
+  const exportExcel = () => {
+    if (filtered.length === 0) return toast.error("Tidak ada data untuk diekspor");
+    try {
+      // Sheet 1: Detail nota (1 baris per nota)
+      const detailRows = filtered.map((i, idx) => ({
+        No: idx + 1,
+        Tanggal: formatDate(i.invoice_date),
+        Supplier: i.supplier,
+        Barang: i.item_name,
+        Qty: i.qty,
+        "Harga Satuan": i.price,
+        "Total Tagihan": i.total,
+        Status: i.status === "SUDAH" ? "LUNAS" : "BELUM DIBAYAR",
+        "Tanggal Bayar": i.paid_at ? formatDate(i.paid_at) : "-",
+      }));
+
+      // Sheet 2: Ringkasan per supplier (dengan total dibayar / belum dibayar & rekening)
+      const groups = new Map<string, Inv[]>();
+      filtered.forEach((r) => {
+        const arr = groups.get(r.supplier) ?? [];
+        arr.push(r);
+        groups.set(r.supplier, arr);
+      });
+      const summaryRows: any[] = Array.from(groups.entries()).map(([name, items], idx) => {
+        const subtotal = items.reduce((s, x) => s + Number(x.total), 0);
+        const paid = items.filter((x) => x.status === "SUDAH").reduce((s, x) => s + Number(x.total), 0);
+        const b = supplierBank[name];
+        return {
+          No: idx + 1,
+          Supplier: name,
+          "Jumlah Nota": items.length,
+          "Total Dibayar": paid,
+          "Total Belum Dibayar": subtotal - paid,
+          "Total Keseluruhan": subtotal,
+          "Bank Supplier": b?.bank_name || "-",
+          "No Rekening": b?.bank_account || "-",
+          "Atas Nama Rekening": b?.account_holder || "-",
+        };
+      });
+      summaryRows.push({
+        No: "",
+        Supplier: "GRAND TOTAL",
+        "Jumlah Nota": filtered.length,
+        "Total Dibayar": paidTotal,
+        "Total Belum Dibayar": unpaidTotal,
+        "Total Keseluruhan": totalFiltered,
+        "Bank Supplier": "",
+        "No Rekening": "",
+        "Atas Nama Rekening": "",
+      });
+
+      const workbook = XLSX.utils.book_new();
+
+      const detailSheet = XLSX.utils.json_to_sheet(detailRows);
+      detailSheet["!cols"] = Object.keys(detailRows[0] || {}).map((key) => {
+        const lengths = detailRows.map((row) => String((row as any)[key] || "").length);
+        return { wch: Math.max(key.length, ...lengths) + 3 };
+      });
+      XLSX.utils.book_append_sheet(workbook, detailSheet, "Detail Nota");
+
+      const summarySheet = XLSX.utils.json_to_sheet(summaryRows);
+      summarySheet["!cols"] = Object.keys(summaryRows[0] || {}).map((key) => {
+        const lengths = summaryRows.map((row) => String((row as any)[key] || "").length);
+        return { wch: Math.max(key.length, ...lengths) + 3 };
+      });
+      XLSX.utils.book_append_sheet(workbook, summarySheet, "Ringkasan Supplier");
+
+      const fileName = `Daftar_Nota_${sanitize(activeBranch?.name || "Cabang")}_${from || "semua"}_s.d._${to || "semua"}.xlsx`;
+      XLSX.writeFile(workbook, fileName);
+      toast.success(`Berhasil mengunduh ${filtered.length} nota ke Excel`);
+    } catch (e: any) {
+      console.error(e);
+      toast.error("Gagal mengunduh Excel: " + (e.message || e));
+    }
+  };
+
   return (
     <AppShell title={`Nota — ${activeBranch?.name}`}>
-      {/* Statistik premium */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+      {/* Peringatan nota belum dibayar / lewat jatuh tempo */}
+      {unpaidRows.length > 0 && (
+        <div className={`mb-4 rounded-lg border border-border border-l-4 bg-card px-4 py-3 shadow-sm ${overdueRows.length > 0 ? "border-l-destructive" : "border-l-amber-500"}`}>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white ${overdueRows.length > 0 ? "bg-red-600" : "bg-amber-500"}`}>
+              <AlertTriangle className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm font-semibold text-foreground">
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock className="h-4 w-4 text-warning" /> {unpaidRows.length} nota belum dibayar
+                </span>
+                <span className="text-muted-foreground">•</span>
+                <span className="tabular-nums text-warning-foreground">{formatRupiah(unpaidRowsTotal)}</span>
+              </div>
+              <div className="mt-1 text-xs text-muted-foreground">
+                {overdueRows.length > 0 ? (
+                  <span className="font-medium text-destructive">
+                    ⚠ {overdueRows.length} di antaranya lewat jatuh tempo ({formatRupiah(overdueTotal)}) — segera tandai pembayaran agar tidak menumpuk.
+                  </span>
+                ) : (
+                  <span>Nota dalam rentang filter ini. Pastikan ditandai lunas setelah dibayar.</span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="outline" className="h-8 rounded-md border-warning/40 bg-card hover:bg-warning/10" onClick={() => setStatus("BELUM")}>
+                Tampilkan yang belum bayar
+              </Button>
+              {overdueRows.length > 0 && (
+                <Button
+                  size="sm"
+                  className="h-8 rounded-md bg-red-600 text-white hover:bg-red-700"
+                  onClick={() => {
+                    setStatus("BELUM");
+                    document.getElementById("invoice-table-export")?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                >
+                  Cek segera
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Statistik ringkas */}
+      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
         <StatCard icon={<Receipt className="h-5 w-5" />} label="Jumlah Nota" value={String(filtered.length)} tone="primary" />
         <StatCard icon={<Wallet className="h-5 w-5" />} label="Total Tagihan" value={formatRupiah(totalFiltered)} tone="primary" />
         <StatCard icon={<CheckCircle2 className="h-5 w-5" />} label="Sudah Dibayar" value={formatRupiah(paidTotal)} tone="success" />
         <StatCard icon={<Clock className="h-5 w-5" />} label="Belum Dibayar" value={formatRupiah(unpaidTotal)} tone="warning" />
       </div>
 
-      {/* Panel filter premium */}
-      <div className="rounded-xl border border-border bg-card p-5 shadow-card mb-5 space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-gradient-to-br from-[hsl(208_100%_35%)] to-[hsl(199_95%_50%)] text-white shadow-[0_2px_10px_hsl(208_100%_45%/0.35)]">
-              <SlidersHorizontal className="h-4 w-4" />
-            </span>
-            <div>
-              <h2 className="text-sm font-semibold text-foreground leading-tight">Filter &amp; Pencarian</h2>
-              <p className="text-xs text-muted-foreground">Saring nota berdasarkan supplier, barang, status, dan rentang tanggal.</p>
-            </div>
+      {/* Panel filter & pencarian (ringkas) */}
+      <div className="mb-4 rounded-lg border border-border bg-card p-3 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative w-44">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input className="h-9 rounded-md pl-8 text-sm" placeholder="Cari supplier…" aria-label="Cari supplier" value={supplier} onChange={(e) => setSupplier(e.target.value)} />
           </div>
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold text-muted-foreground">
-            <Receipt className="h-3.5 w-3.5" /> {filtered.length} nota tampil
-          </span>
-        </div>
-        <div className="grid md:grid-cols-6 gap-3 border-t border-border/60 pt-4">
-          <div className="space-y-1.5"><Label className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Supplier (daftar)</Label>
-            <Select value={supplierFilter} onValueChange={setSupplierFilter}>
-              <SelectTrigger className="h-9 rounded-lg"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Semua supplier</SelectItem>
-                {supplierOptions.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
-              </SelectContent>
-            </Select>
+          <div className="relative w-44">
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input className="h-9 rounded-md pl-8 text-sm" placeholder="Cari barang…" aria-label="Cari barang" value={itemQuery} onChange={(e) => setItemQuery(e.target.value)} />
           </div>
-          <div className="space-y-1.5"><Label className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Cari supplier</Label><div className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="h-9 rounded-lg pl-9" placeholder="ketik…" value={supplier} onChange={(e) => setSupplier(e.target.value)} /></div></div>
-          <div className="space-y-1.5"><Label className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Nama Item</Label><div className="relative"><Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" /><Input className="h-9 rounded-lg pl-9" placeholder="cth: beras" value={itemQuery} onChange={(e) => setItemQuery(e.target.value)} /></div></div>
-          <div className="space-y-1.5 col-span-1 md:col-span-2"><Label className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Status</Label>
-            <div className="flex h-9 gap-1 rounded-lg bg-muted p-1 text-xs">
-              {([
-                { v: "all", label: "Semua", n: statusCounts.all, active: "bg-background text-foreground shadow-sm" },
-                { v: "BELUM", label: "Belum", n: statusCounts.BELUM, active: "bg-amber-500 text-white shadow-sm" },
-                { v: "SUDAH", label: "Lunas", n: statusCounts.SUDAH, active: "bg-emerald-600 text-white shadow-sm" },
-              ] as const).map((c) => (
-                <button
-                  key={c.v}
-                  type="button"
-                  onClick={() => setStatus(c.v)}
-                  className={`flex-1 cursor-pointer rounded-md px-2 font-semibold transition-all ${
-                    status === c.v ? c.active : "text-muted-foreground hover:text-foreground"
-                  }`}
+          <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+            <SelectTrigger className="h-9 w-40 rounded-md text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua supplier</SelectItem>
+              {supplierOptions.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <div className="flex h-9 items-center gap-0.5 rounded-md bg-muted p-1 text-xs">
+            {([
+              { v: "all", label: "Semua", n: statusCounts.all, active: "bg-background text-foreground shadow-sm" },
+              { v: "BELUM", label: "Belum", n: statusCounts.BELUM, active: "bg-amber-500 text-white shadow-sm" },
+              { v: "SUDAH", label: "Lunas", n: statusCounts.SUDAH, active: "bg-emerald-600 text-white shadow-sm" },
+            ] as const).map((c) => (
+              <button
+                key={c.v}
+                type="button"
+                onClick={() => setStatus(c.v)}
+                className={`cursor-pointer rounded px-2.5 py-1 font-semibold transition-all ${
+                  status === c.v ? c.active : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {c.label} <span className="font-normal opacity-70">({c.n})</span>
+              </button>
+            ))}
+          </div>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="h-9 gap-1.5 rounded-md text-xs">
+                <CalendarIcon className="h-4 w-4 text-primary" />
+                {from && to ? `${formatDate(from)} – ${formatDate(to)}` : "Semua Tanggal"}
+                <ChevronDown className="h-3 w-3 text-muted-foreground" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="range"
+                selected={selectedRange}
+                onSelect={handleRangeSelect}
+                numberOfMonths={2}
+                defaultMonth={from ? parseDate(from) : new Date()}
+              />
+              <div className="flex items-center justify-between gap-2 border-t border-border/70 p-2">
+                <span className="text-[10px] text-muted-foreground px-1">
+                  {from && to ? `${formatDate(from)} s.d. ${formatDate(to)}` : "Belum ada rentang"}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-[10px] text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setFrom("");
+                    setTo("");
+                  }}
                 >
-                  {c.label} <span className="font-normal opacity-80">({c.n})</span>
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex items-end"><div className="w-full rounded-lg border border-border bg-muted/40 px-3 py-1.5"><div className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Total</div><div className="font-bold text-base text-foreground">{formatRupiah(totalFiltered)}</div></div></div>
-        </div>
-
-        {/* Rentang tanggal via kalender range picker */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4">
-          <div className="flex items-center gap-2.5">
-            <Label className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground">Rentang Tanggal</Label>
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm" className="gap-1.5 rounded-lg text-xs h-9">
-                  <CalendarIcon className="h-4 w-4 text-primary" />
-                  {from && to ? `${formatDate(from)} – ${formatDate(to)}` : "Semua Tanggal"}
-                  <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                  Hapus
                 </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="range"
-                  selected={selectedRange}
-                  onSelect={handleRangeSelect}
-                  numberOfMonths={2}
-                  defaultMonth={from ? parseDate(from) : new Date()}
-                />
-                <div className="flex items-center justify-between gap-2 border-t border-border/70 p-2">
-                  <span className="text-[10px] text-muted-foreground px-1">
-                    {from && to ? `${formatDate(from)} s.d. ${formatDate(to)}` : "Belum ada rentang"}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 text-[10px] text-muted-foreground hover:text-foreground"
-                    onClick={() => {
-                      setFrom("");
-                      setTo("");
-                    }}
-                  >
-                    Hapus
-                  </Button>
-                </div>
-              </PopoverContent>
-            </Popover>
+              </div>
+            </PopoverContent>
+          </Popover>
+          <div className="ml-auto flex items-baseline gap-2 rounded-md bg-muted/50 px-3 py-2">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Total</span>
+            <span className="text-sm font-bold tabular-nums text-foreground">{formatRupiah(totalFiltered)}</span>
           </div>
-          <span className="text-xs text-muted-foreground">
-            Menampilkan nota periode{" "}
-            <b className="text-foreground/80">
-              {from && to ? `${formatDate(from)} s.d. ${formatDate(to)}` : "semua tanggal"}
-            </b>
-          </span>
         </div>
+        {totalFiltered > 0 && (
+          <div className="mt-3 flex items-center gap-3 border-t border-border/50 pt-3">
+            <span className="whitespace-nowrap text-xs font-semibold text-foreground">Progres pembayaran</span>
+            <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                style={{ width: `${paidPct}%` }}
+              />
+            </div>
+            <span className="whitespace-nowrap text-xs text-muted-foreground">
+              <b className="text-emerald-600">{paidPct}%</b> lunas · sisa <b className="text-amber-600">{formatRupiah(unpaidTotal)}</b>
+            </span>
+          </div>
+        )}
       </div>
 
-      {/* Strip progres pembayaran */}
-      {totalFiltered > 0 && (
-        <div className="mb-5 rounded-xl border border-border bg-card p-4 shadow-card">
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
-              <CheckCircle2 className="h-4 w-4 text-success" /> Progres Pembayaran
-            </div>
-            <div className="flex items-center gap-3 text-xs">
-              <span className="text-emerald-600 font-semibold">Lunas {paidPct}%</span>
-              <span className="text-muted-foreground">sisa {formatRupiah(unpaidTotal)}</span>
-            </div>
-          </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-[#22c55e] to-[#16a34a] transition-all duration-500"
-              style={{ width: `${paidPct}%` }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Toolbar aksi premium */}
-      <div className="flex flex-wrap gap-2 mb-5">
+      {/* Toolbar aksi */}
+      <div className="flex flex-wrap gap-2 mb-4">
         <Button variant="outline" className="h-9 rounded-lg border-border bg-card shadow-sm hover:bg-accent" onClick={exportPDF}><FileDown className="h-4 w-4 mr-1.5 text-primary" /> Export PDF</Button>
         <Button variant="outline" className="h-9 rounded-lg border-border bg-card shadow-sm hover:bg-accent" onClick={exportJPG}><ImgIcon className="h-4 w-4 mr-1.5 text-primary" /> Export JPG</Button>
+        <Button variant="outline" className="h-9 rounded-lg border-border bg-card shadow-sm hover:bg-accent" onClick={exportExcel} title="Unduh data terfilter ke Excel"><FileSpreadsheet className="h-4 w-4 mr-1.5 text-emerald-600" /> Export Excel</Button>
         <Button variant="outline" className="h-9 rounded-lg border-border bg-card shadow-sm hover:bg-accent" onClick={downloadSelectedPhotos} disabled={downloading}>
           <Archive className="h-4 w-4 mr-1.5 text-primary" /> {downloading ? "Mengemas…" : `Unduh Foto ZIP${selected.size > 0 ? ` (${selected.size})` : ""}`}
         </Button>
@@ -826,9 +1074,9 @@ export default function ManagerInvoices() {
         )}
       </div>
 
-      {/* Tabel premium */}
-      <div id="invoice-table-export" className="overflow-hidden rounded-xl border border-border bg-card shadow-card">
-        <div className="flex items-center justify-between border-b border-border/70 bg-gradient-to-r from-muted/60 to-transparent px-4 py-3">
+      {/* Tabel daftar nota */}
+      <div id="invoice-table-export" className="overflow-hidden rounded-lg border border-border bg-card shadow-sm">
+        <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
           <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
             <Receipt className="h-4 w-4 text-primary" /> Daftar Nota
           </div>
@@ -837,55 +1085,55 @@ export default function ManagerInvoices() {
           </span>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-left">
-              <tr className="text-[11px] uppercase tracking-wider text-muted-foreground">
-                <th className="p-3 w-8"><Checkbox checked={allFilteredSelected} onCheckedChange={toggleSelectAll} aria-label="Pilih semua" /></th>
-                <th className="p-3">Bayar</th><th className="p-3">Tanggal</th><th className="p-3">Supplier</th>
-                <th className="p-3">Barang</th><th className="p-3 text-right">Qty</th><th className="p-3 text-right">Harga</th>
-                <th className="p-3 text-right">Total</th><th className="p-3">Status</th><th className="p-3">Tgl Bayar</th><th className="p-3 text-right">Aksi</th>
+          <table className="w-full text-[13px]">
+            <thead className="bg-muted/40 text-left">
+              <tr className="text-[10.5px] uppercase tracking-wider text-muted-foreground">
+                <th className="px-3 py-2.5 w-8"><Checkbox checked={allFilteredSelected} onCheckedChange={toggleSelectAll} aria-label="Pilih semua" /></th>
+                <th className="px-3 py-2.5">Bayar</th><th className="px-3 py-2.5">Tanggal</th><th className="px-3 py-2.5">Supplier</th>
+                <th className="px-3 py-2.5">Barang</th><th className="px-3 py-2.5 text-right">Qty</th><th className="px-3 py-2.5 text-right">Harga</th>
+                <th className="px-3 py-2.5 text-right">Total</th><th className="px-3 py-2.5">Status</th><th className="px-3 py-2.5">Tgl Bayar</th><th className="px-3 py-2.5 text-right">Aksi</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="p-10">
-                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                      <Loader2 className="h-7 w-7 animate-spin text-primary" />
+                  <td colSpan={11} className="p-8">
+                    <div className="flex flex-col items-center gap-2 py-4 text-muted-foreground">
+                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
                       <p className="text-sm">Memuat nota…</p>
                     </div>
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="p-10">
-                    <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                      <AlertCircle className="h-8 w-8 text-muted-foreground/50" />
+                  <td colSpan={11} className="p-8">
+                    <div className="flex flex-col items-center gap-2 py-4 text-muted-foreground">
+                      <AlertCircle className="h-7 w-7 text-muted-foreground/50" />
                       <p className="text-sm font-medium text-foreground">Tidak ada nota</p>
                       <p className="text-xs">Coba ubah filter atau rentang tanggal.</p>
                     </div>
                   </td>
                 </tr>
               ) : filtered.map((i) => (
-                <tr key={i.id} className={`border-t border-border/60 transition-colors hover:bg-primary/[0.03] ${selected.has(i.id) ? "bg-primary/5" : ""}`}>
-                  <td className="p-3"><Checkbox checked={selected.has(i.id)} onCheckedChange={() => toggleSelect(i.id)} aria-label="Pilih nota" /></td>
-                  <td className="p-3"><Checkbox checked={i.status === "SUDAH"} onCheckedChange={(v) => togglePaid(i, !!v)} title="Tandai lunas / belum bayar" /></td>
-                  <td className="p-3 whitespace-nowrap font-medium">{formatDate(i.invoice_date)}</td>
-                  <td className="p-3 font-semibold text-foreground/90">{i.supplier}</td>
-                  <td className="p-3 text-foreground/80">{i.item_name}</td>
-                  <td className="p-3 text-right tabular-nums text-muted-foreground">{i.qty}</td>
-                  <td className="p-3 text-right tabular-nums text-muted-foreground">{formatRupiah(Number(i.price))}</td>
-                  <td className="p-3 text-right font-bold tabular-nums">{formatRupiah(Number(i.total))}</td>
-                  <td className="p-3">
+                <tr key={i.id} className={`border-t border-border/50 transition-colors hover:bg-muted/30 ${selected.has(i.id) ? "bg-primary/5" : ""}`}>
+                  <td className="px-3 py-2.5"><Checkbox checked={selected.has(i.id)} onCheckedChange={() => toggleSelect(i.id)} aria-label="Pilih nota" /></td>
+                  <td className="px-3 py-2.5"><Checkbox checked={i.status === "SUDAH"} onCheckedChange={(v) => togglePaid(i, !!v)} title="Tandai lunas / belum bayar" /></td>
+                  <td className="px-3 py-2.5 whitespace-nowrap font-medium">{formatDate(i.invoice_date)}</td>
+                  <td className="px-3 py-2.5 font-semibold text-foreground/90">{i.supplier}</td>
+                  <td className="px-3 py-2.5 text-foreground/80">{i.item_name}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{i.qty}</td>
+                  <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{formatRupiah(Number(i.price))}</td>
+                  <td className="px-3 py-2.5 text-right font-bold tabular-nums">{formatRupiah(Number(i.total))}</td>
+                  <td className="px-3 py-2.5">
                     <span className={`status-pill inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${i.status === "SUDAH" ? "bg-emerald-50 text-emerald-700 border-emerald-200/50" : "bg-amber-50 text-amber-800 border-amber-200/50"}`}>
                       {i.status === "SUDAH" ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
                       {i.status === "SUDAH" ? "Lunas" : "Belum"}
                     </span>
                   </td>
-                  <td className="p-3 whitespace-nowrap text-xs text-muted-foreground">
+                  <td className="px-3 py-2.5 whitespace-nowrap text-xs text-muted-foreground">
                     {i.paid_at ? formatDate(i.paid_at) : "—"}
                   </td>
-                  <td className="p-3">
+                  <td className="px-3 py-2.5">
                     <div className="flex items-center justify-end gap-1">
                       <Button size="icon" variant="ghost" title="Detail" className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary" onClick={() => openDetail(i)}><Eye className="h-4 w-4" /></Button>
                       <Button size="icon" variant="ghost" title="Edit nota" className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary" onClick={() => openEdit(i)}><Pencil className="h-4 w-4" /></Button>
@@ -1025,9 +1273,86 @@ export default function ManagerInvoices() {
           </DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5">
-              <Label>Nomor tujuan (opsional)</Label>
-              <Input placeholder="cth: 628123456789" value={waPhone} onChange={(e) => setWaPhone(e.target.value)} />
-              <div className="text-xs text-muted-foreground">Kosongkan untuk memilih kontak saat dialihkan ke WhatsApp.</div>
+              <Label>Tujuan kirim</Label>
+              <div className="flex h-9 w-fit items-center gap-0.5 rounded-md bg-muted p-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setWaGroupMode(false)}
+                  className={`cursor-pointer rounded px-3 py-1.5 font-semibold transition-all ${!waGroupMode ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  Nomor HP
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setWaGroupMode(true); loadGroups(); }}
+                  className={`cursor-pointer rounded px-3 py-1.5 font-semibold transition-all ${waGroupMode ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  <Users className="h-3.5 w-3.5 inline-block" /> Grup WhatsApp
+                </button>
+              </div>
+              {waGroupMode ? (
+                <div className="flex items-center gap-2">
+                  <Select value={waGroupId} onValueChange={setWaGroupId}>
+                    <SelectTrigger className="h-9 flex-1 rounded-md text-sm"><SelectValue placeholder="Pilih grup WhatsApp…" /></SelectTrigger>
+                    <SelectContent>
+                      {waGroups.length === 0 && <SelectItem value="__none" disabled>Belum ada grup — pastikan Gateway aktif &amp; muat ulang</SelectItem>}
+                      {waGroups.map((g) => <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <Button variant="outline" size="icon" className="h-9 w-9 shrink-0 rounded-md" title="Muat ulang daftar grup" onClick={loadGroups}>
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <Input placeholder="cth: 628123456789" value={waPhone} onChange={(e) => setWaPhone(e.target.value)} />
+                  <div className="text-xs text-muted-foreground">Kosongkan untuk memilih kontak saat dialihkan ke WhatsApp.</div>
+                </>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label className="flex items-center gap-2 text-xs font-medium text-foreground">
+                <Checkbox checked={waUseMedia} onCheckedChange={(v) => setWaUseMedia(!!v)} aria-label="Lampirkan foto nota" />
+                Lampirkan foto nota <span className="font-normal text-muted-foreground">({waPhotoCount} foto)</span>
+              </Label>
+              <p className="text-[11px] text-muted-foreground">Foto nota dari data yang dikirim akan dilampirkan. Memerlukan Gateway aktif.</p>
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <Label className="flex items-center gap-2 text-xs font-medium text-foreground">
+                  <ImgIcon className="h-3.5 w-3.5 text-primary" /> Gambar dari laptop ({waLaptopImages.length})
+                </Label>
+                {waLaptopImages.length > 0 && (
+                  <Button size="sm" variant="ghost" className="h-6 text-[10px] text-muted-foreground hover:text-destructive" onClick={() => setWaLaptopImages([])}>
+                    Bersihkan semua
+                  </Button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {waLaptopImages.map((img, idx) => (
+                  <div key={idx} className="relative">
+                    <img src={img.dataUrl} alt={img.name} className="h-16 w-16 rounded-md border border-border object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setWaLaptopImages((prev) => prev.filter((_, i) => i !== idx))}
+                      className="absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center rounded-full bg-destructive text-white shadow-sm hover:bg-destructive/90"
+                      title="Hapus gambar"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+                {waLaptopImages.length < 30 && (
+                  <label
+                    className="grid h-16 w-16 cursor-pointer place-items-center rounded-md border border-dashed border-border text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
+                    title="Pilih gambar dari laptop"
+                  >
+                    <Plus className="h-5 w-5" />
+                    <input type="file" accept="image/*" multiple className="hidden" onChange={handleAddLaptopImages} />
+                  </label>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground">Pilih beberapa gambar dari laptop untuk dilampirkan. Memerlukan Gateway aktif.</p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -1036,6 +1361,7 @@ export default function ManagerInvoices() {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="rincian">Rincian (per item)</SelectItem>
+                    <SelectItem value="total">Total pembayaran saja</SelectItem>
                     <SelectItem value="ringkasan">Ringkasan (per supplier)</SelectItem>
                     <SelectItem value="gabungan">Gabungan (Ringkasan + Rincian)</SelectItem>
                   </SelectContent>
@@ -1057,6 +1383,7 @@ export default function ManagerInvoices() {
                 <Label className="flex items-center gap-1.5"><Settings2 className="h-3.5 w-3.5" /> Isi pesan (bisa diedit)</Label>
                 <Button size="sm" variant="ghost" onClick={() => {
                   setWaTemplate(DEFAULT_WA_TEMPLATE);
+                  setWaTotTpl(DEFAULT_TOTAL_TEMPLATE);
                   setWaGroupTpl(DEFAULT_GROUP_TEMPLATE);
                   setWaItemTpl(DEFAULT_ITEM_TEMPLATE);
                   setWaSumMain(DEFAULT_SUM_MAIN);
@@ -1076,6 +1403,11 @@ export default function ManagerInvoices() {
             <details className="text-xs rounded-lg border bg-muted/30 p-3">
               <summary className="cursor-pointer text-primary font-medium">Atur template format</summary>
               <div className="mt-3 space-y-3">
+                {waMode === "total" && <div className="space-y-1">
+                  <Label className="text-xs">Template utama — Total Pembayaran</Label>
+                  <Textarea rows={7} value={waTotTpl} onChange={(e) => setWaTotTpl(e.target.value)} className="font-mono text-xs" />
+                  <div className="text-[11px] text-muted-foreground"><code>{"{cabang} {periode} {tanggal} {jumlah} {total} {sudah} {belum}"}</code></div>
+                </div>}
                 {(waMode === "rincian" || waMode === "gabungan") && <>
                   <div className="space-y-1">
                     <Label className="text-xs">Template utama — Rincian</Label>
@@ -1211,19 +1543,16 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
 function StatCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: "primary" | "success" | "warning" }) {
   const toneCls =
     tone === "success"
-      ? "from-[#22c55e] to-[#16a34a] shadow-[0_4px_14px_hsl(151_62%_40%/0.35)]"
+      ? "border-success/25 bg-success/10 text-success"
       : tone === "warning"
-        ? "from-[#f59e0b] to-[#d97706] shadow-[0_4px_14px_hsl(38_92%_50%/0.35)]"
-        : "from-[hsl(208_100%_35%)] to-[hsl(199_95%_50%)] shadow-[0_4px_14px_hsl(208_100%_45%/0.35)]";
+        ? "border-warning/30 bg-warning/10 text-warning"
+        : "border-primary/15 bg-primary/10 text-primary";
   return (
-    <div className="group relative overflow-hidden rounded-xl border border-border bg-card p-4 shadow-card transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_8px_24px_hsl(212_50%_12%/0.1)]">
-      <div className={`pointer-events-none absolute -right-6 -top-8 h-20 w-20 rounded-full bg-gradient-to-br opacity-15 blur-2xl transition-opacity group-hover:opacity-30 ${toneCls.split(" ")[0]}`} />
-      <div className="flex items-center gap-3">
-        <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-gradient-to-br text-white ${toneCls}`}>{icon}</div>
-        <div className="min-w-0">
-          <div className="truncate text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
-          <div className="truncate text-lg font-bold text-foreground">{value}</div>
-        </div>
+    <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
+      <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg border ${toneCls}`}>{icon}</div>
+      <div className="min-w-0">
+        <div className="truncate text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
+        <div className="truncate text-base font-bold leading-snug text-foreground">{value}</div>
       </div>
     </div>
   );
