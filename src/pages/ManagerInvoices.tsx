@@ -103,6 +103,12 @@ Total: *{total}*`;
 // Baris total per supplier untuk laporan general (variabel: {supplier} {jumlah} {subtotal})
 const DEFAULT_TOTALS_LINE = `• {supplier}: *{subtotal}* ({jumlah} nota)`;
 
+// Blok rekening opsional untuk mode "Total pembayaran saja"
+// Variabel: {rekening} {total_per_supplier} {total} {belum}
+const DEFAULT_TOTAL_REK_BLOCK = `
+*Rekening Pembayaran (Belum Dibayar):*
+{rekening}`;
+
 // === Template terpisah untuk pesan ke MASING-MASING SUPPLIER ===
 // Variabel utama: {cabang} {supplier} {tanggal} {periode} {jumlah} {subtotal} {rekening} {lines}
 const DEFAULT_SUP_MAIN = `Halo *{supplier}*,
@@ -168,6 +174,8 @@ export default function ManagerInvoices() {
   const [waLaptopImages, setWaLaptopImages] = useState<{ name: string; dataUrl: string }[]>([]);
   const [waTemplate, setWaTemplate] = useState<string>(() => localStorage.getItem("wa_template") ?? DEFAULT_WA_TEMPLATE);
   const [waTotTpl, setWaTotTpl] = useState<string>(() => localStorage.getItem("wa_total_tpl") ?? DEFAULT_TOTAL_TEMPLATE);
+  const [waTotRek, setWaTotRek] = useState<boolean>(() => localStorage.getItem("wa_total_rek") === "true");
+  const [waTotRekTpl, setWaTotRekTpl] = useState<string>(() => localStorage.getItem("wa_total_rek_tpl") ?? DEFAULT_TOTAL_REK_BLOCK);
   const [waGroupTpl, setWaGroupTpl] = useState<string>(() => localStorage.getItem("wa_group_tpl") ?? DEFAULT_GROUP_TEMPLATE);
   const [waItemTpl, setWaItemTpl] = useState<string>(() => localStorage.getItem("wa_item_tpl") ?? DEFAULT_ITEM_TEMPLATE);
   const [waSumMain, setWaSumMain] = useState<string>(() => localStorage.getItem("wa_sum_main") ?? DEFAULT_SUM_MAIN);
@@ -475,7 +483,10 @@ export default function ManagerInvoices() {
     const rincian = buildRincian(rows) || "(tidak ada nota)";
     const ringkasan = buildRingkasan(rows) || "(tidak ada nota)";
     if (waMode === "total") {
-      return tplVars(waTotTpl);
+      const base = tplVars(waTotTpl);
+      if (!waTotRek) return base;
+      if (waTotTpl.includes("{rekening}")) return base;
+      return base + "\n" + tplVars(waTotRekTpl);
     }
     if (waMode === "ringkasan") {
       return tplVars(waSumMain).split("{ringkasan}").join(ringkasan);
@@ -552,6 +563,8 @@ export default function ManagerInvoices() {
     localStorage.setItem("wa_mode", waMode);
     localStorage.setItem("wa_template", waTemplate);
     localStorage.setItem("wa_total_tpl", waTotTpl);
+    localStorage.setItem("wa_total_rek", String(waTotRek));
+    localStorage.setItem("wa_total_rek_tpl", waTotRekTpl);
     localStorage.setItem("wa_group_tpl", waGroupTpl);
     localStorage.setItem("wa_item_tpl", waItemTpl);
     localStorage.setItem("wa_sum_main", waSumMain);
@@ -1382,6 +1395,7 @@ export default function ManagerInvoices() {
                 <Button size="sm" variant="ghost" onClick={() => {
                   setWaTemplate(DEFAULT_WA_TEMPLATE);
                   setWaTotTpl(DEFAULT_TOTAL_TEMPLATE);
+                  setWaTotRekTpl(DEFAULT_TOTAL_REK_BLOCK);
                   setWaGroupTpl(DEFAULT_GROUP_TEMPLATE);
                   setWaItemTpl(DEFAULT_ITEM_TEMPLATE);
                   setWaSumMain(DEFAULT_SUM_MAIN);
@@ -1404,7 +1418,24 @@ export default function ManagerInvoices() {
                 {waMode === "total" && <div className="space-y-1">
                   <Label className="text-xs">Template utama — Total Pembayaran</Label>
                   <Textarea rows={7} value={waTotTpl} onChange={(e) => setWaTotTpl(e.target.value)} className="font-mono text-xs" />
-                  <div className="text-[11px] text-muted-foreground"><code>{"{cabang} {periode} {tanggal} {jumlah} {total} {sudah} {belum}"}</code></div>
+                  <div className="text-[11px] text-muted-foreground"><code>{"{cabang} {periode} {tanggal} {jumlah} {total} {sudah} {belum} {rekening} {total_per_supplier}"}</code></div>
+                  <label className="mt-2 flex items-center gap-2 text-[11px] font-medium">
+                    <input
+                      type="checkbox"
+                      checked={waTotRek}
+                      onChange={(e) => { const v = e.target.checked; setWaTotRek(v); setTimeout(() => setWaText(buildText(waUseSelected && selected.size > 0 ? filtered.filter((i) => selected.has(i.id)) : filtered)), 0); }}
+                    />
+                    Sertakan rekening supplier di pesan total pembayaran
+                  </label>
+                  {waTotRek && (
+                    <div className="space-y-1 pt-1">
+                      <Label className="text-xs">Blok rekening (total pembayaran)</Label>
+                      <Textarea rows={3} value={waTotRekTpl} onChange={(e) => setWaTotRekTpl(e.target.value)} className="font-mono text-xs" />
+                      <div className="text-[11px] text-muted-foreground">
+                        <code>{"{rekening} {total_per_supplier} {total} {belum}"}</code> — diabaikan bila template utama sudah memuat <code>{"{rekening}"}</code>.
+                      </div>
+                    </div>
+                  )}
                 </div>}
                 {(waMode === "rincian" || waMode === "gabungan") && <>
                   <div className="space-y-1">
