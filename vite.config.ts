@@ -13,8 +13,27 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        // Code-splitting: memecah bundle per vendor agar ukuran tiap chunk
+        // kecil dan peak memory parser (wasm) tidak melampaui batas RAM.
+        manualChunks(id: string) {
+          if (!id.includes("node_modules")) return;
+          if (id.includes("recharts") || id.includes("/d3-") || id.includes("victory-vendor")) return "charts";
+          if (id.includes("react-router") || id.includes("history")) return "router";
+          if (id.includes("@supabase")) return "supabase";
+          if (id.includes("lucide-react")) return "icons";
+          if (id.includes("xlsx") || id.includes("jspdf") || id.includes("html2canvas") || id.includes("jszip")) return "export";
+          if (id.includes("date-fns")) return "date";
+          if (id.includes("react") || id.includes("scheduler") || id.includes("/redux")) return "react";
+          return "vendor";
+        },
+      },
+    },
+  },
   plugins: [
-    react(), 
+    react(),
     mode === "development" && componentTagger(),
     {
       name: 'spawn-whatsapp-gateway',
@@ -29,7 +48,7 @@ export default defineConfig(({ mode }) => ({
                 stdio: 'ignore'
               });
               child.unref();
-              
+
               res.writeHead(200, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
               res.end(JSON.stringify({ success: true, message: 'WhatsApp server spawning...' }));
             } catch (err: any) {

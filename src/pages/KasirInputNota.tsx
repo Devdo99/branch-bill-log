@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { formatRupiah } from "@/lib/format";
-import { Camera, Upload } from "lucide-react";
+import { Camera, Upload, Store } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
 import { z } from "zod";
 
 const schema = z.object({
@@ -123,7 +124,13 @@ export default function KasirInputNota() {
               </div>
               {supplierMode === "select" ? (
                 suppliers.length === 0 ? (
-                  <div className="text-xs text-muted-foreground border rounded-md p-2">Belum ada supplier. Klik "+ Supplier baru" untuk mengetik manual.</div>
+                  <EmptyState
+                    icon={<Store className="h-5 w-5" />}
+                    title="Belum ada supplier"
+                    description="Klik tombol + Supplier baru di atas untuk mengetik manual."
+                    compact
+                    className="border rounded-md px-4 py-5"
+                  />
                 ) : (
                   <Select value={form.supplier} onValueChange={(v) => setForm({ ...form, supplier: v })}>
                     <SelectTrigger><SelectValue placeholder="Pilih supplier..." /></SelectTrigger>

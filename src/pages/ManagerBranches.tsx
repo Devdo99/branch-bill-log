@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Building2, Plus, Trash2 } from "lucide-react";
+import { LoadingBlock } from "@/components/LoadingBlock";
+import { EmptyState } from "@/components/EmptyState";
 
 export default function ManagerBranches() {
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
@@ -62,8 +64,14 @@ export default function ManagerBranches() {
         </Dialog>
       </div>
 
-      {loading ? <p className="text-muted-foreground">Memuat…</p> : branches.length === 0 ? (
-        <div className="app-card p-10 text-center text-muted-foreground">Belum ada cabang. Tambahkan cabang pertama.</div>
+      {loading ? <LoadingBlock rows={3} /> : branches.length === 0 ? (
+        <div className="app-card">
+          <EmptyState
+            icon={<Building2 className="h-6 w-6" />}
+            title="Belum ada cabang"
+            description="Tambahkan cabang pertama untuk mulai mengelola nota dan omset per cabang."
+          />
+        </div>
       ) : (
         <div className="grid md:grid-cols-3 gap-4">
           {branches.map((b) => (

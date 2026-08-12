@@ -33,6 +33,8 @@ import {
   CartesianGrid, 
   Legend 
 } from "recharts";
+import { LoadingPage } from "@/components/LoadingBlock";
+import { EmptyState } from "@/components/EmptyState";
 
 interface Invoice {
   id: string;
@@ -339,10 +341,7 @@ export default function ManagerFinance() {
       </div>
 
       {loading ? (
-        <div className="min-h-[400px] flex items-center justify-center text-muted-foreground">
-          <RefreshCw className="h-8 w-8 animate-spin mb-2" />
-          <span className="ml-2">Memuat Laporan Keuangan...</span>
-        </div>
+        <LoadingPage label="Memuat laporan keuangan…" />
       ) : (
         <>
           {/* Top Finance Metrics Cards */}
@@ -352,7 +351,7 @@ export default function ManagerFinance() {
             <div className="app-card p-4 flex flex-col justify-between">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-muted-foreground uppercase">Pendapatan (Omset)</span>
-                <div className="h-8 w-8 rounded-full bg-emerald-50 text-emerald-600 grid place-items-center">
+                <div className="h-8 w-8 rounded-full bg-success/10 text-success grid place-items-center">
                   <ArrowUpRight className="h-4 w-4" />
                 </div>
               </div>
@@ -366,12 +365,12 @@ export default function ManagerFinance() {
             <div className="app-card p-4 flex flex-col justify-between">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-muted-foreground uppercase">Tagihan Terbayar</span>
-                <div className="h-8 w-8 rounded-full bg-amber-50 text-amber-600 grid place-items-center">
+                <div className="h-8 w-8 rounded-full bg-warning/15 text-warning-foreground grid place-items-center">
                   <ArrowDownRight className="h-4 w-4" />
                 </div>
               </div>
               <div className="mt-4">
-                <div className="text-xl font-bold font-mono text-amber-700">{formatRupiah(totalPaidInvoices)}</div>
+                <div className="text-xl font-bold font-mono text-warning-foreground">{formatRupiah(totalPaidInvoices)}</div>
                 <p className="text-[10px] text-muted-foreground mt-1">Arus Kas Keluar Aktual</p>
               </div>
             </div>
@@ -380,12 +379,12 @@ export default function ManagerFinance() {
             <div className="app-card p-4 flex flex-col justify-between border-l-4 border-l-primary">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-muted-foreground uppercase">Arus Kas Bersih</span>
-                <div className={`h-8 w-8 rounded-full grid place-items-center ${netCashFlow >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+                <div className={`h-8 w-8 rounded-full grid place-items-center ${netCashFlow >= 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}`}>
                   <Wallet className="h-4 w-4" />
                 </div>
               </div>
               <div className="mt-4">
-                <div className={`text-xl font-bold font-mono ${netCashFlow >= 0 ? "text-emerald-700" : "text-rose-600"}`}>
+                <div className={`text-xl font-bold font-mono ${netCashFlow >= 0 ? "text-success" : "text-destructive"}`}>
                   {formatRupiah(netCashFlow)}
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-1">Saldo Kas Riil (Omset - Terbayar)</p>
@@ -396,12 +395,12 @@ export default function ManagerFinance() {
             <div className="app-card p-4 flex flex-col justify-between">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-muted-foreground uppercase">Hutang (Belum Bayar)</span>
-                <div className="h-8 w-8 rounded-full bg-rose-50 text-rose-600 grid place-items-center">
+                <div className="h-8 w-8 rounded-full bg-destructive/10 text-destructive grid place-items-center">
                   <DollarSign className="h-4 w-4" />
                 </div>
               </div>
               <div className="mt-4">
-                <div className="text-xl font-bold font-mono text-rose-600">{formatRupiah(totalUnpaidInvoices)}</div>
+                <div className="text-xl font-bold font-mono text-destructive">{formatRupiah(totalUnpaidInvoices)}</div>
                 <p className="text-[10px] text-muted-foreground mt-1">Kewajiban Pembayaran Pending</p>
               </div>
             </div>
@@ -410,12 +409,12 @@ export default function ManagerFinance() {
             <div className="app-card p-4 flex flex-col justify-between border-l-4 border-l-success">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-muted-foreground uppercase">Laba/Rugi Bersih</span>
-                <div className={`h-8 w-8 rounded-full grid place-items-center ${netProfit >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+                <div className={`h-8 w-8 rounded-full grid place-items-center ${netProfit >= 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}`}>
                   {netProfit >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
                 </div>
               </div>
               <div className="mt-4">
-                <div className={`text-xl font-bold font-mono ${netProfit >= 0 ? "text-emerald-700" : "text-rose-600"}`}>
+                <div className={`text-xl font-bold font-mono ${netProfit >= 0 ? "text-success" : "text-destructive"}`}>
                   {formatRupiah(netProfit)}
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-1">Estimasi Buku (Omset - Total Nota)</p>
@@ -433,8 +432,13 @@ export default function ManagerFinance() {
               </h3>
               <div className="h-[280px] w-full">
                 {chartData.length === 0 ? (
-                  <div className="h-full flex items-center justify-center text-muted-foreground text-sm">
-                    Tidak ada data untuk grafik dalam periode ini.
+                  <div className="h-full flex items-center justify-center">
+                    <EmptyState
+                      icon={<Calendar className="h-6 w-6" />}
+                      title="Tidak ada data untuk grafik"
+                      description="Tidak ada transaksi dalam periode yang dipilih."
+                      compact
+                    />
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height="100%">
@@ -499,7 +503,7 @@ export default function ManagerFinance() {
                   </div>
                   <div className="flex justify-between items-center text-xs font-semibold bg-muted/40 p-2 rounded-md mt-2">
                     <span>Total Pendapatan Bersih</span>
-                    <span className="font-mono text-emerald-700">{formatRupiah(totalOmset)}</span>
+                    <span className="font-mono text-success">{formatRupiah(totalOmset)}</span>
                   </div>
                 </div>
 
@@ -509,27 +513,27 @@ export default function ManagerFinance() {
                   <div className="space-y-1.5 text-sm px-1">
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Nota Lunas (Sudah Dibayar)</span>
-                      <span className="font-mono text-amber-700">({formatRupiah(totalPaidInvoices)})</span>
+                      <span className="font-mono text-warning-foreground">({formatRupiah(totalPaidInvoices)})</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Nota Hutang (Belum Dibayar)</span>
-                      <span className="font-mono text-rose-600">({formatRupiah(totalUnpaidInvoices)})</span>
+                      <span className="font-mono text-destructive">({formatRupiah(totalUnpaidInvoices)})</span>
                     </div>
                   </div>
                   <div className="flex justify-between items-center text-xs font-semibold bg-muted/40 p-2 rounded-md mt-2">
                     <span>Total Biaya Operasional</span>
-                    <span className="font-mono text-rose-600">({formatRupiah(totalInvoices)})</span>
+                    <span className="font-mono text-destructive">({formatRupiah(totalInvoices)})</span>
                   </div>
                 </div>
 
                 {/* Summary Profit/Loss */}
                 <div className="pt-2 border-t border-dashed">
-                  <div className={`flex justify-between items-center p-3 rounded-lg font-bold text-base ${netProfit >= 0 ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"}`}>
+                  <div className={`flex justify-between items-center p-3 rounded-md font-bold text-base ${netProfit >= 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}`}>
                     <span className="text-sm">Laba / (Rugi) Bersih</span>
                     <span className="font-mono">{formatRupiah(netProfit)}</span>
                   </div>
                   <div className="mt-2 text-[10px] text-muted-foreground text-center">
-                    Margin Profitabilitas Cabang: <b className={netProfit >= 0 ? "text-emerald-700" : "text-rose-600"}>
+                    Margin Profitabilitas Cabang: <b className={netProfit >= 0 ? "text-success" : "text-destructive"}>
                       {totalOmset > 0 ? ((netProfit / totalOmset) * 100).toFixed(1) : 0}%
                     </b>
                   </div>
@@ -552,9 +556,12 @@ export default function ManagerFinance() {
             </div>
 
             {supplierAnalysis.length === 0 ? (
-              <div className="p-8 text-center text-sm text-muted-foreground">
-                Belum ada data nota dari supplier dalam periode ini.
-              </div>
+              <EmptyState
+                icon={<CreditCard className="h-6 w-6" />}
+                title="Belum ada data nota dari supplier"
+                description="Data akan muncul setelah ada nota tercatat pada periode yang dipilih."
+                compact
+              />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -563,8 +570,8 @@ export default function ManagerFinance() {
                       <th className="p-3 pl-4">Supplier</th>
                       <th className="p-3 text-center">Nota</th>
                       <th className="p-3 text-right">Total Beban</th>
-                      <th className="p-3 text-right text-emerald-700">Terbayar (Lunas)</th>
-                      <th className="p-3 text-right text-rose-600">Belum Terbayar (Hutang)</th>
+                      <th className="p-3 text-right text-success">Terbayar (Lunas)</th>
+                      <th className="p-3 text-right text-destructive">Belum Terbayar (Hutang)</th>
                       <th className="p-3 text-center">Informasi Rekening Bank</th>
                     </tr>
                   </thead>
@@ -579,8 +586,8 @@ export default function ManagerFinance() {
                           <td className="p-3 pl-4 font-medium">{s.name}</td>
                           <td className="p-3 text-center font-mono text-muted-foreground">{s.count}</td>
                           <td className="p-3 text-right font-mono font-medium">{formatRupiah(s.total)}</td>
-                          <td className="p-3 text-right font-mono text-emerald-700">{formatRupiah(s.paid)}</td>
-                          <td className="p-3 text-right font-mono text-rose-600 font-semibold">{formatRupiah(s.unpaid)}</td>
+                          <td className="p-3 text-right font-mono text-success">{formatRupiah(s.paid)}</td>
+                          <td className="p-3 text-right font-mono text-destructive font-semibold">{formatRupiah(s.unpaid)}</td>
                           <td className="p-3">
                             {s.unpaid > 0 ? (
                               hasBank ? (
@@ -605,8 +612,8 @@ export default function ManagerFinance() {
                                 </div>
                               )
                             ) : (
-                              <div className="flex items-center justify-center gap-1.5 text-xs text-emerald-700 font-medium">
-                                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                              <div className="flex items-center justify-center gap-1.5 text-xs text-success font-medium">
+                                <CheckCircle2 className="h-4 w-4 text-success" />
                                 Lunas / Beban Nihil
                               </div>
                             )}

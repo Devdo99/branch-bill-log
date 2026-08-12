@@ -8,7 +8,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Trash2, Plus, Pencil, Save, X, Download, Upload, FileSpreadsheet } from "lucide-react";
+import { Trash2, Plus, Pencil, Save, X, Download, Upload, FileSpreadsheet, Store } from "lucide-react";
+import { LoadingBlock } from "@/components/LoadingBlock";
+import { EmptyState } from "@/components/EmptyState";
 
 interface Supplier {
   id: string; name: string; note: string | null;
@@ -216,9 +218,18 @@ export default function ManagerSuppliers() {
             <Button size="sm" onClick={onPickFile} disabled={importing}><Upload className="h-4 w-4 mr-1" />{importing ? "Mengimpor…" : "Import"}</Button>
             <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onFile} />
           </div>
-          {loading ? <p className="p-5 text-muted-foreground">Memuat…</p>
-           : list.length === 0 ? <p className="p-5 text-muted-foreground text-sm">Belum ada supplier. Tambahkan agar kasir tinggal pilih saat input nota.</p>
-           : (
+          {loading ? <LoadingBlock rows={5} />
+           : list.length === 0 ? (
+             <EmptyState
+               icon={<Store className="h-6 w-6" />}
+               title="Belum ada supplier"
+               description="Tambahkan supplier agar kasir tinggal memilih saat input nota. Bisa diisi manual atau impor dari CSV."
+               action={
+                 <Button size="sm" onClick={downloadTemplate}><FileSpreadsheet className="h-4 w-4 mr-1" /> Unduh template CSV</Button>
+               }
+               compact
+             />
+           ) : (
             <ul className="divide-y">
               {list.map((s) => (
                 <li key={s.id} className="p-4 flex items-start gap-3">

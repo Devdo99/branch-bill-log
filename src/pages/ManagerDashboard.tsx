@@ -9,6 +9,8 @@ import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { LoadingPage } from "@/components/LoadingBlock";
+import { EmptyState } from "@/components/EmptyState";
 
 interface Inv { id: string; supplier: string; item_name: string; qty: number; price: number; total: number; status: "BELUM" | "SUDAH"; invoice_date: string; branch_id: string }
 interface Rev { id: string; branch_id: string; revenue_date: string; amount: number }
@@ -248,7 +250,7 @@ export default function ManagerDashboard() {
 
   const COLORS = ["hsl(198 78% 42%)", "hsl(221 70% 50%)", "hsl(151 62% 38%)", "hsl(38 88% 54%)", "hsl(262 58% 58%)", "hsl(218 15% 52%)"];
 
-  if (loading) return <AppShell title="Dashboard"><p className="text-muted-foreground">Memuat...</p></AppShell>;
+  if (loading) return <AppShell title="Dashboard"><LoadingPage label="Memuat dashboard…" /></AppShell>;
 
   return (
     <AppShell title={`Dashboard - ${activeBranch?.name}`}>
@@ -339,9 +341,9 @@ export default function ManagerDashboard() {
 
       {/* Peringatan nota belum dibayar / lewat jatuh tempo (semua periode, tidak terpengaruh filter) */}
       {branchUnpaid.length > 0 && (
-        <div className={`mb-4 overflow-hidden rounded-xl border shadow-card ${branchOverdue.length > 0 ? "border-destructive/40 bg-gradient-to-r from-destructive/10 via-card to-card" : "border-warning/50 bg-gradient-to-r from-warning/10 via-card to-card"}`}>
+        <div className={`mb-4 overflow-hidden rounded-md border bg-card shadow-card ${branchOverdue.length > 0 ? "border-destructive/40" : "border-warning/50"}`}>
           <div className="flex flex-wrap items-center gap-3 p-4">
-            <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg text-white shadow-md ${branchOverdue.length > 0 ? "bg-gradient-to-br from-red-600 to-red-500" : "bg-gradient-to-br from-amber-500 to-orange-500"}`}>
+            <span className={`grid h-11 w-11 shrink-0 place-items-center rounded-md ${branchOverdue.length > 0 ? "bg-destructive text-destructive-foreground" : "bg-warning text-warning-foreground"}`}>
               <AlertTriangle className="h-5 w-5" />
             </span>
             <div className="min-w-0 flex-1">
@@ -364,7 +366,7 @@ export default function ManagerDashboard() {
             </div>
             <Link
               to="/manager/invoices"
-              className="inline-flex h-9 items-center gap-2 rounded-lg bg-gradient-to-br from-red-600 to-red-500 px-4 text-sm font-semibold text-white shadow-[0_2px_12px_hsl(0_70%_45%/0.35)] hover:from-red-500 hover:to-red-600"
+              className="inline-flex h-9 items-center gap-2 rounded-md bg-destructive px-4 text-sm font-semibold text-destructive-foreground hover:bg-destructive/90"
             >
               <ListChecks className="h-4 w-4" /> Cek nota sekarang
             </Link>
@@ -419,7 +421,12 @@ export default function ManagerDashboard() {
           </div>
           <div className="mt-3 space-y-2">
             {latestUnpaid.length === 0 ? (
-              <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">Tidak ada nota tertunda.</div>
+              <EmptyState
+                icon={<ListChecks className="h-5 w-5" />}
+                title="Tidak ada nota tertunda"
+                compact
+                className="border border-dashed rounded-md"
+              />
             ) : latestUnpaid.map((i) => (
               <div key={i.id} className="flex items-center justify-between gap-3 rounded-md border bg-background px-3 py-2 text-sm">
                 <div className="min-w-0">
@@ -871,7 +878,15 @@ function KpiTile({ icon, label, value, helper, tone }: { icon: React.ReactNode; 
   );
 }
 function EmptyChart() {
-  return <div className="h-[260px] grid place-items-center text-sm text-muted-foreground">Belum ada data</div>;
+  return (
+    <EmptyState
+      icon={<BarChart3 className="h-5 w-5" />}
+      title="Belum ada data"
+      description="Data akan muncul setelah ada nota atau omset tercatat pada periode ini."
+      compact
+      className="h-[260px] justify-center"
+    />
+  );
 }
 
 function MiniStat({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {

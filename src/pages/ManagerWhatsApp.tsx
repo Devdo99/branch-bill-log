@@ -122,12 +122,12 @@ export default function ManagerWhatsApp() {
         {/* Status Panel */}
         <div className="app-card p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-start gap-4">
-            <div className={`grid h-12 w-12 place-items-center rounded-lg ${
+            <div className={`grid h-12 w-12 place-items-center rounded-md ${
               status === "connected" 
-                ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" 
+                ? "bg-success/10 text-success" 
                 : status === "offline"
-                ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-                : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
+                ? "bg-destructive/10 text-destructive"
+                : "bg-warning/15 text-warning-foreground"
             }`}>
               {status === "connected" && <CheckCircle2 className="h-6 w-6" />}
               {status === "offline" && <WifiOff className="h-6 w-6" />}
@@ -137,7 +137,7 @@ export default function ManagerWhatsApp() {
               <h2 className="font-semibold text-lg">Status Gateway WhatsApp</h2>
               <div className="flex items-center gap-2 mt-1">
                 <span className={`inline-block h-2.5 w-2.5 rounded-full ${
-                  status === "connected" ? "bg-green-500 animate-pulse" : status === "offline" ? "bg-red-500" : "bg-amber-500 animate-pulse"
+                  status === "connected" ? "bg-success animate-pulse" : status === "offline" ? "bg-destructive" : "bg-warning animate-pulse"
                 }`} />
                 <span className="text-sm font-medium">
                   {status === "connected" && "Terhubung (Online)"}
@@ -214,9 +214,9 @@ export default function ManagerWhatsApp() {
                 </li>
               </ol>
               
-              <div className="mt-6 p-4 rounded-lg bg-blue-50 border border-blue-100 dark:bg-blue-950/20 dark:border-blue-900/30 flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-                <div className="text-xs text-blue-800 dark:text-blue-300">
+              <div className="mt-6 p-4 rounded-md bg-accent/60 border border-accent flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-accent-foreground shrink-0 mt-0.5" />
+                <div className="text-xs text-accent-foreground/90">
                   <strong>Catatan Sesi:</strong> Sesi masuk Anda akan disimpan di folder <code>backend/auth_session/</code>. Setelah terhubung sekali, Anda tidak perlu mengulang proses pemindaian QR ini meskipun komputer dimatikan atau aplikasi dimulai ulang.
                 </div>
               </div>

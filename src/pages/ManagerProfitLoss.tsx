@@ -20,6 +20,8 @@ import {
   DollarSign
 } from "lucide-react";
 import jsPDF from "jspdf";
+import { LoadingPage } from "@/components/LoadingBlock";
+import { EmptyState } from "@/components/EmptyState";
 
 interface Invoice {
   id: string;
@@ -320,10 +322,7 @@ export default function ManagerProfitLoss() {
       </div>
 
       {loading ? (
-        <div className="min-h-[300px] flex items-center justify-center text-muted-foreground">
-          <RefreshCw className="h-8 w-8 animate-spin mb-2" />
-          <span className="ml-2">Memuat Laporan Laba Rugi...</span>
-        </div>
+        <LoadingPage label="Memuat laporan laba rugi…" />
       ) : (
         <div className="grid lg:grid-cols-3 gap-6">
           
@@ -355,7 +354,7 @@ export default function ManagerProfitLoss() {
                       <span className="font-mono">{formatRupiah(totalOmset)}</span>
                     </div>
                   </div>
-                  <div className="flex justify-between items-center font-bold text-xs bg-emerald-50 text-emerald-800 p-2.5 rounded-md mt-4 border border-emerald-100">
+                  <div className="flex justify-between items-center font-bold text-xs bg-success/10 text-success p-2.5 rounded-md mt-4 border border-success/20">
                     <span>TOTAL PENDAPATAN BERSIH (A)</span>
                     <span className="font-mono text-sm">{formatRupiah(totalOmset)}</span>
                   </div>
@@ -370,22 +369,22 @@ export default function ManagerProfitLoss() {
                   <div className="space-y-3 text-sm pl-4 pr-2">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Nota Lunas (Beban Terbayar)</span>
-                      <span className="font-mono text-amber-700">{formatRupiah(totalPaidInvoices)}</span>
+                      <span className="font-mono text-warning-foreground">{formatRupiah(totalPaidInvoices)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Nota Pending (Kewajiban Hutang)</span>
-                      <span className="font-mono text-rose-600">{formatRupiah(totalUnpaidInvoices)}</span>
+                      <span className="font-mono text-destructive">{formatRupiah(totalUnpaidInvoices)}</span>
                     </div>
                   </div>
-                  <div className="flex justify-between items-center font-bold text-xs bg-rose-50 text-rose-800 p-2.5 rounded-md mt-4 border border-rose-100">
+                  <div className="flex justify-between items-center font-bold text-xs bg-destructive/10 text-destructive p-2.5 rounded-md mt-4 border border-destructive/20">
                     <span>TOTAL BEBAN OPERASIONAL (B)</span>
-                    <span className="font-mono text-sm text-rose-700">({formatRupiah(totalInvoices)})</span>
+                    <span className="font-mono text-sm">({formatRupiah(totalInvoices)})</span>
                   </div>
                 </div>
 
                 {/* 3. Net Result */}
                 <div className="pt-4 border-t border-dashed">
-                  <div className={`flex justify-between items-center p-4 rounded-lg font-bold text-lg ${netProfit >= 0 ? "bg-emerald-600 text-white shadow-sm" : "bg-rose-600 text-white shadow-sm"}`}>
+                  <div className={`flex justify-between items-center p-4 rounded-md font-bold text-lg ${netProfit >= 0 ? "bg-success text-success-foreground" : "bg-destructive text-destructive-foreground"}`}>
                     <span>LABA / (RUGI) BERSIH (A - B)</span>
                     <span className="font-mono">{formatRupiah(netProfit)}</span>
                   </div>
@@ -406,7 +405,7 @@ export default function ManagerProfitLoss() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="border rounded-lg p-3 bg-muted/20">
                   <div className="text-[10px] text-muted-foreground uppercase font-medium">Profit Margin</div>
-                  <div className={`text-base font-bold mt-1 ${netProfit >= 0 ? "text-emerald-600" : "text-rose-600"}`}>
+                  <div className={`text-base font-bold mt-1 ${netProfit >= 0 ? "text-success" : "text-destructive"}`}>
                     {marginPct.toFixed(1)}%
                   </div>
                 </div>
@@ -419,7 +418,7 @@ export default function ManagerProfitLoss() {
               </div>
 
               <div className="flex items-center gap-3 p-3 rounded-lg border bg-muted/30">
-                <div className={`h-9 w-9 rounded-full grid place-items-center ${netProfit >= 0 ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
+                <div className={`h-9 w-9 rounded-full grid place-items-center ${netProfit >= 0 ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive"}`}>
                   <TrendingUp className="h-4 w-4" />
                 </div>
                 <div>
@@ -438,7 +437,12 @@ export default function ManagerProfitLoss() {
               </h3>
               
               {expensesBySupplier.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic text-center py-4">Tidak ada data pengeluaran</p>
+                <EmptyState
+                  icon={<FileSpreadsheet className="h-5 w-5" />}
+                  title="Tidak ada data pengeluaran"
+                  description="Belum ada nota supplier tercatat pada periode ini."
+                  compact
+                />
               ) : (
                 <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
                   {expensesBySupplier.map((s, idx) => {

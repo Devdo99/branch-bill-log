@@ -13,12 +13,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { toast } from "sonner";
-import { Search, FileDown, FileSpreadsheet, Image as ImgIcon, MessageCircle, Eye, ZoomIn, ZoomOut, RotateCw, Pencil, Trash2, Receipt, Wallet, CheckCircle2, Clock, Settings2, RotateCcw, Archive, ListChecks, RefreshCw, Users, Send, Loader2, AlertCircle, AlertTriangle, Calendar as CalendarIcon, ChevronDown, Plus, X } from "lucide-react";
+import { Search, FileDown, FileSpreadsheet, Image as ImgIcon, MessageCircle, Eye, ZoomIn, ZoomOut, RotateCw, Pencil, Trash2, Receipt, Wallet, CheckCircle2, Clock, Settings2, RotateCcw, Archive, ListChecks, RefreshCw, Users, Send, AlertTriangle, Calendar as CalendarIcon, ChevronDown, Plus, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { LoadingBlock } from "@/components/LoadingBlock";
+import { EmptyState } from "@/components/EmptyState";
+import { StatusBadge } from "@/components/StatusBadge";
 import jsPDF from "jspdf";
 import JSZip from "jszip";
 import * as XLSX from "xlsx";
@@ -896,9 +899,9 @@ export default function ManagerInvoices() {
     <AppShell title={`Nota — ${activeBranch?.name}`}>
       {/* Peringatan nota belum dibayar / lewat jatuh tempo */}
       {unpaidRows.length > 0 && (
-        <div className={`mb-4 rounded-lg border border-border border-l-4 bg-card px-4 py-3 shadow-sm ${overdueRows.length > 0 ? "border-l-destructive" : "border-l-amber-500"}`}>
+        <div className={`mb-4 rounded-md border border-border border-l-4 bg-card px-4 py-3 shadow-sm ${overdueRows.length > 0 ? "border-l-destructive" : "border-l-warning"}`}>
           <div className="flex flex-wrap items-center gap-3">
-            <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white ${overdueRows.length > 0 ? "bg-red-600" : "bg-amber-500"}`}>
+            <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-md ${overdueRows.length > 0 ? "bg-destructive text-destructive-foreground" : "bg-warning text-warning-foreground"}`}>
               <AlertTriangle className="h-5 w-5" />
             </span>
             <div className="min-w-0 flex-1">
@@ -926,7 +929,7 @@ export default function ManagerInvoices() {
               {overdueRows.length > 0 && (
                 <Button
                   size="sm"
-                  className="h-8 rounded-md bg-red-600 text-white hover:bg-red-700"
+                  className="h-8 rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90"
                   onClick={() => {
                     setStatus("BELUM");
                     document.getElementById("invoice-table-export")?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -969,8 +972,8 @@ export default function ManagerInvoices() {
           <div className="flex h-9 items-center gap-0.5 rounded-md bg-muted p-1 text-xs">
             {([
               { v: "all", label: "Semua", n: statusCounts.all, active: "bg-background text-foreground shadow-sm" },
-              { v: "BELUM", label: "Belum", n: statusCounts.BELUM, active: "bg-amber-500 text-white shadow-sm" },
-              { v: "SUDAH", label: "Lunas", n: statusCounts.SUDAH, active: "bg-emerald-600 text-white shadow-sm" },
+              { v: "BELUM", label: "Belum", n: statusCounts.BELUM, active: "bg-warning text-warning-foreground shadow-sm" },
+              { v: "SUDAH", label: "Lunas", n: statusCounts.SUDAH, active: "bg-success text-success-foreground shadow-sm" },
             ] as const).map((c) => (
               <button
                 key={c.v}
@@ -1028,12 +1031,12 @@ export default function ManagerInvoices() {
             <span className="whitespace-nowrap text-xs font-semibold text-foreground">Progres pembayaran</span>
             <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                className="h-full rounded-full bg-success transition-all duration-500"
                 style={{ width: `${paidPct}%` }}
               />
             </div>
             <span className="whitespace-nowrap text-xs text-muted-foreground">
-              <b className="text-emerald-600">{paidPct}%</b> lunas · sisa <b className="text-amber-600">{formatRupiah(unpaidTotal)}</b>
+              <b className="text-success">{paidPct}%</b> lunas · sisa <b className="text-warning-foreground">{formatRupiah(unpaidTotal)}</b>
             </span>
           </div>
         )}
@@ -1047,7 +1050,7 @@ export default function ManagerInvoices() {
         <Button variant="outline" className="h-9 rounded-lg border-border bg-card shadow-sm hover:bg-accent" onClick={downloadSelectedPhotos} disabled={downloading}>
           <Archive className="h-4 w-4 mr-1.5 text-primary" /> {downloading ? "Mengemas…" : `Unduh Foto ZIP${selected.size > 0 ? ` (${selected.size})` : ""}`}
         </Button>
-        <Button className="h-9 rounded-lg bg-gradient-to-br from-[#22c55e] to-[#16a34a] text-white shadow-[0_2px_12px_hsl(151_62%_40%/0.4)] hover:from-[#16a34a] hover:to-[#15803d]" onClick={openWa}><MessageCircle className="h-4 w-4 mr-1.5" /> Kirim WhatsApp</Button>
+        <Button className="h-9 rounded-md bg-success text-success-foreground hover:bg-success/90" onClick={openWa}><MessageCircle className="h-4 w-4 mr-1.5" /> Kirim WhatsApp</Button>
         {selected.size > 0 && (
           <span className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-primary/20 bg-primary/5 px-3 text-xs font-semibold text-primary">
             <Receipt className="h-3.5 w-3.5" /> {selected.size} nota · {formatRupiah(selectedTotal)}
@@ -1055,7 +1058,7 @@ export default function ManagerInvoices() {
         )}
         {selected.size > 0 && (
           <Button 
-            className="h-9 rounded-lg bg-gradient-to-br from-[hsl(208_100%_35%)] to-[hsl(199_95%_50%)] text-white shadow-[0_2px_12px_hsl(208_100%_45%/0.4)] hover:from-[hsl(208_100%_30%)] hover:to-[hsl(199_95%_45%)]" 
+            className="h-9 rounded-md bg-primary text-primary-foreground hover:bg-primary/90" 
             onClick={() => {
               const rows = filtered.filter((i) => selected.has(i.id));
               const totalAmount = rows.reduce((s, x) => s + Number(x.total), 0);
@@ -1097,21 +1100,19 @@ export default function ManagerInvoices() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="p-8">
-                    <div className="flex flex-col items-center gap-2 py-4 text-muted-foreground">
-                      <Loader2 className="h-6 w-6 animate-spin text-primary" />
-                      <p className="text-sm">Memuat nota…</p>
-                    </div>
+                  <td colSpan={11}>
+                    <LoadingBlock rows={6} />
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="p-8">
-                    <div className="flex flex-col items-center gap-2 py-4 text-muted-foreground">
-                      <AlertCircle className="h-7 w-7 text-muted-foreground/50" />
-                      <p className="text-sm font-medium text-foreground">Tidak ada nota</p>
-                      <p className="text-xs">Coba ubah filter atau rentang tanggal.</p>
-                    </div>
+                  <td colSpan={11}>
+                    <EmptyState
+                      icon={<Receipt className="h-6 w-6" />}
+                      title="Tidak ada nota"
+                      description="Coba ubah filter pencarian atau rentang tanggal."
+                      compact
+                    />
                   </td>
                 </tr>
               ) : filtered.map((i) => (
@@ -1125,10 +1126,7 @@ export default function ManagerInvoices() {
                   <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{formatRupiah(Number(i.price))}</td>
                   <td className="px-3 py-2.5 text-right font-bold tabular-nums">{formatRupiah(Number(i.total))}</td>
                   <td className="px-3 py-2.5">
-                    <span className={`status-pill inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${i.status === "SUDAH" ? "bg-emerald-50 text-emerald-700 border-emerald-200/50" : "bg-amber-50 text-amber-800 border-amber-200/50"}`}>
-                      {i.status === "SUDAH" ? <CheckCircle2 className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
-                      {i.status === "SUDAH" ? "Lunas" : "Belum"}
-                    </span>
+                    <StatusBadge status={i.status} />
                   </td>
                   <td className="px-3 py-2.5 whitespace-nowrap text-xs text-muted-foreground">
                     {i.paid_at ? formatDate(i.paid_at) : "—"}

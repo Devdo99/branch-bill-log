@@ -24,6 +24,9 @@ import {
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import type { DateRange } from "react-day-picker";
+import { LoadingPage } from "@/components/LoadingBlock";
+import { EmptyState } from "@/components/EmptyState";
+import { StatusBadge } from "@/components/StatusBadge";
 
 interface Invoice {
   id: string;
@@ -425,7 +428,7 @@ export default function ManagerPayments() {
               size="sm"
               onClick={exportToExcel}
               disabled={filteredSupplierSummary.length === 0}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white gap-1.5 rounded-lg text-xs font-semibold"
+              className="bg-success hover:bg-success/90 text-success-foreground gap-1.5 rounded-md text-xs font-semibold"
             >
               <FileSpreadsheet className="h-4 w-4" />
               Download Supplier
@@ -478,17 +481,14 @@ export default function ManagerPayments() {
       </div>
 
       {loading ? (
-        <div className="min-h-[300px] flex flex-col items-center justify-center text-muted-foreground bg-card border border-border rounded-xl p-8 shadow-sm">
-          <RefreshCw className="h-8 w-8 animate-spin mb-3 text-primary" />
-          <p className="text-sm font-medium">Memuat Laporan Pembayaran...</p>
-        </div>
+        <LoadingPage label="Memuat laporan pembayaran…" />
       ) : (
         <>
           {/* Summary Metrics Section */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {/* Paid Total Card */}
-            <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex items-center gap-4">
-              <div className="h-10 w-10 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center shrink-0">
+            <div className="app-card p-4 flex items-center gap-4">
+              <div className="h-10 w-10 rounded-md bg-success/10 text-success flex items-center justify-center shrink-0">
                 <CheckCircle2 className="h-5 w-5" />
               </div>
               <div>
@@ -499,8 +499,8 @@ export default function ManagerPayments() {
             </div>
 
             {/* Unpaid Total Card */}
-            <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex items-center gap-4">
-              <div className="h-10 w-10 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center shrink-0">
+            <div className="app-card p-4 flex items-center gap-4">
+              <div className="h-10 w-10 rounded-md bg-warning/15 text-warning-foreground flex items-center justify-center shrink-0">
                 <Clock className="h-5 w-5" />
               </div>
               <div>
@@ -511,8 +511,8 @@ export default function ManagerPayments() {
             </div>
 
             {/* Total Invoices in Period Card */}
-            <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex items-center gap-4">
-              <div className="h-10 w-10 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center shrink-0">
+            <div className="app-card p-4 flex items-center gap-4">
+              <div className="h-10 w-10 rounded-md bg-primary/10 text-primary flex items-center justify-center shrink-0">
                 <FileSpreadsheet className="h-5 w-5" />
               </div>
               <div>
@@ -527,8 +527,8 @@ export default function ManagerPayments() {
             </div>
 
             {/* Supplier Count Card */}
-            <div className="bg-card border border-border rounded-xl p-4 shadow-sm flex items-center gap-4">
-              <div className="h-10 w-10 rounded-lg bg-purple-500/10 text-purple-600 flex items-center justify-center shrink-0">
+            <div className="app-card p-4 flex items-center gap-4">
+              <div className="h-10 w-10 rounded-md bg-accent text-accent-foreground flex items-center justify-center shrink-0">
                 <Building2 className="h-5 w-5" />
               </div>
               <div>
@@ -565,13 +565,13 @@ export default function ManagerPayments() {
                 </button>
                 <button
                   onClick={() => setSupSummaryFilter("unpaid")}
-                  className={`px-2.5 py-1 rounded-md transition-all ${supSummaryFilter === "unpaid" ? "bg-background font-semibold shadow-sm text-amber-600" : "text-muted-foreground hover:text-foreground"}`}
+                  className={`px-2.5 py-1 rounded-md transition-all ${supSummaryFilter === "unpaid" ? "bg-background font-semibold shadow-sm text-warning-foreground" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   Belum Lunas ({supplierSummary.filter((s) => s.unpaid > 0).length})
                 </button>
                 <button
                   onClick={() => setSupSummaryFilter("paid")}
-                  className={`px-2.5 py-1 rounded-md transition-all ${supSummaryFilter === "paid" ? "bg-background font-semibold shadow-sm text-emerald-600" : "text-muted-foreground hover:text-foreground"}`}
+                  className={`px-2.5 py-1 rounded-md transition-all ${supSummaryFilter === "paid" ? "bg-background font-semibold shadow-sm text-success" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   Lunas ({supplierSummary.filter((s) => s.unpaid === 0 && s.paid > 0).length})
                 </button>
@@ -579,7 +579,12 @@ export default function ManagerPayments() {
             </div>
 
             {filteredSupplierSummary.length === 0 ? (
-              <p className="text-xs text-muted-foreground py-4 text-center">Tidak ada ringkasan supplier pada rentang tanggal ini.</p>
+              <EmptyState
+                icon={<Building2 className="h-6 w-6" />}
+                title="Tidak ada ringkasan supplier"
+                description="Tidak ada data pada rentang tanggal dan filter yang dipilih."
+                compact
+              />
             ) : (
               <>
                 <div className="space-y-2">
@@ -613,7 +618,7 @@ export default function ManagerPayments() {
                                 const dates = getPaidDates(invs);
                                 if (!dates.length) return null;
                                 return (
-                                  <p className="text-[10px] text-emerald-600 font-medium mt-0.5 truncate">
+                                  <p className="text-[10px] text-success font-medium mt-0.5 truncate">
                                     Dibayar: {dates.join(", ")}
                                   </p>
                                 );
@@ -623,13 +628,13 @@ export default function ManagerPayments() {
                           <div className="flex items-center gap-4 text-[11px] shrink-0">
                             <div className="text-right">
                               <p className="text-[9px] uppercase text-muted-foreground">Belum Lunas</p>
-                              <p className={`font-semibold ${s.unpaid > 0 ? "text-amber-600" : "text-muted-foreground"}`}>
+                              <p className={`font-semibold ${s.unpaid > 0 ? "text-warning-foreground" : "text-muted-foreground"}`}>
                                 {formatRupiah(s.unpaid)}
                               </p>
                             </div>
                             <div className="text-right">
                               <p className="text-[9px] uppercase text-muted-foreground">Sudah Lunas</p>
-                              <p className={`font-semibold ${s.paid > 0 ? "text-emerald-600" : "text-muted-foreground"}`}>
+                              <p className={`font-semibold ${s.paid > 0 ? "text-success" : "text-muted-foreground"}`}>
                                 {formatRupiah(s.paid)}
                               </p>
                             </div>
@@ -677,7 +682,7 @@ export default function ManagerPayments() {
                                         <td className="py-2 px-2 whitespace-nowrap">{formatDate(i.invoice_date)}</td>
                                         <td className="py-2 px-2 whitespace-nowrap">
                                           {i.paid_at ? (
-                                            <span className="inline-flex items-center gap-1 font-semibold text-emerald-700">
+                                            <span className="inline-flex items-center gap-1 font-semibold text-success">
                                               <CheckCircle2 className="h-3 w-3" /> {formatDate(i.paid_at)}
                                             </span>
                                           ) : (
@@ -688,15 +693,7 @@ export default function ManagerPayments() {
                                         <td className="py-2 px-2 text-center text-muted-foreground">{i.qty}</td>
                                         <td className="py-2 px-2 text-right font-semibold">{formatRupiah(i.total)}</td>
                                         <td className="py-2 px-2 text-center">
-                                          {i.status === "SUDAH" ? (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-                                              Lunas
-                                            </span>
-                                          ) : (
-                                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
-                                              Pending
-                                            </span>
-                                          )}
+                                          <StatusBadge status={i.status} labels={{ done: "Lunas", pending: "Pending" }} />
                                         </td>
                                       </tr>
                                     ))}
@@ -731,10 +728,10 @@ export default function ManagerPayments() {
                   </p>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
                     <span className="text-muted-foreground">
-                      Dibayar <b className="text-emerald-600">{formatRupiah(summaryTotals.paid)}</b>
+                      Dibayar <b className="text-success">{formatRupiah(summaryTotals.paid)}</b>
                     </span>
                     <span className="text-muted-foreground">
-                      Belum <b className="text-amber-600">{formatRupiah(summaryTotals.unpaid)}</b>
+                      Belum <b className="text-warning-foreground">{formatRupiah(summaryTotals.unpaid)}</b>
                     </span>
                     <span className="text-muted-foreground">
                       Total <b className="text-foreground">{formatRupiah(summaryTotals.paid + summaryTotals.unpaid)}</b>

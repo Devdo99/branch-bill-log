@@ -10,6 +10,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { TrendingUp, Plus, Pencil, Trash2, Save, X, Calendar, Wallet, BarChart3 } from "lucide-react";
+import { LoadingBlock } from "@/components/LoadingBlock";
+import { EmptyState } from "@/components/EmptyState";
 
 interface Revenue {
   id: string; revenue_date: string; amount: number; note: string | null;
@@ -119,9 +121,15 @@ export default function ManagerOmset() {
             <div className="space-y-1"><Label className="text-xs">Dari</Label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-8" /></div>
             <div className="space-y-1"><Label className="text-xs">Sampai</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-8" /></div>
           </div>
-          {loading ? <p className="p-5 text-muted-foreground">Memuat…</p>
-           : filtered.length === 0 ? <p className="p-5 text-sm text-muted-foreground">Belum ada catatan omset.</p>
-           : (
+          {loading ? <LoadingBlock rows={5} />
+           : filtered.length === 0 ? (
+             <EmptyState
+               icon={<Calendar className="h-6 w-6" />}
+               title="Belum ada catatan omset"
+               description="Input omset harian melalui form di samping untuk mulai memantau pendapatan cabang."
+               compact
+             />
+           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-muted text-left">

@@ -13,6 +13,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ShieldCheck, UserPlus, Trash2, Save } from "lucide-react";
+import { LoadingBlock } from "@/components/LoadingBlock";
+import { EmptyState } from "@/components/EmptyState";
 
 type PermKey = "manage_invoices" | "mark_paid" | "manage_suppliers" | "manage_revenues" | "manage_cashiers" | "view_reports";
 
@@ -126,12 +128,14 @@ export default function ManagerAdmins() {
       <div className="grid lg:grid-cols-[1fr,360px] gap-5">
         <div className="space-y-4">
           {loading ? (
-            <div className="app-card p-6 text-muted-foreground">Memuat…</div>
+            <div className="app-card"><LoadingBlock rows={3} /></div>
           ) : rows.length === 0 ? (
-            <div className="app-card p-8 text-center">
-              <ShieldCheck className="h-10 w-10 mx-auto mb-2 opacity-60" />
-              <div className="font-semibold">Belum ada admin di cabang ini</div>
-              <div className="text-sm text-muted-foreground">Buat admin baru di panel kanan.</div>
+            <div className="app-card">
+              <EmptyState
+                icon={<ShieldCheck className="h-6 w-6" />}
+                title="Belum ada admin di cabang ini"
+                description="Buat admin baru melalui panel di samping untuk membantu mengelola cabang ini."
+              />
             </div>
           ) : rows.map((r) => (
             <div key={r.id} className="app-card p-4">

@@ -5,7 +5,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { formatRupiah, formatDate } from "@/lib/format";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Plus, Receipt, CheckCircle2, Clock } from "lucide-react";
+import { EmptyState } from "@/components/EmptyState";
+import { LoadingBlock } from "@/components/LoadingBlock";
+import { StatusBadge } from "@/components/StatusBadge";
+import { Plus, Receipt, FilePlus2 } from "lucide-react";
 
 interface Inv { id: string; invoice_date: string; supplier: string; item_name: string; total: number; status: string }
 
@@ -50,10 +53,18 @@ export default function KasirDashboard() {
       </div>
 
       <h2 className="font-semibold text-xl mt-8 mb-3">Nota Terbaru</h2>
-      {loading ? <p className="text-muted-foreground">Memuat...</p> : invs.length === 0 ? (
-        <div className="app-card p-12 text-center text-muted-foreground">
-          <Receipt className="h-8 w-8 mx-auto mb-2" />
-          Belum ada nota. <Link to="/kasir/input" className="text-primary font-semibold">Tambah nota pertama</Link>
+      {loading ? <LoadingBlock rows={5} /> : invs.length === 0 ? (
+        <div className="app-card">
+          <EmptyState
+            icon={<Receipt className="h-6 w-6" />}
+            title="Belum ada nota"
+            description="Catat pengeluaran operasional pertama cabang ini agar riwayat tagihan mulai tercatat."
+            action={
+              <Button asChild size="sm">
+                <Link to="/kasir/input"><FilePlus2 className="h-4 w-4 mr-1.5" /> Tambah nota pertama</Link>
+              </Button>
+            }
+          />
         </div>
       ) : (
         <div className="app-table">
@@ -67,10 +78,7 @@ export default function KasirDashboard() {
                   <td className="p-3">{i.item_name}</td>
                   <td className="p-3 text-right font-semibold">{formatRupiah(Number(i.total))}</td>
                   <td className="p-3">
-                    <span className={`status-pill inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-bold border ${i.status === "SUDAH" ? "bg-emerald-50 text-emerald-700 border-emerald-200/50" : "bg-amber-50 text-amber-800 border-amber-200/50"}`}>
-                      {i.status === "SUDAH" ? <CheckCircle2 className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
-                      {i.status}
-                    </span>
+                    <StatusBadge status={i.status} />
                   </td>
                 </tr>
               ))}
