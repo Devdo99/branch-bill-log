@@ -1486,7 +1486,7 @@ export default function ManagerInvoices() {
                   <Textarea rows={2} value={waTotalsLine} onChange={(e) => setWaTotalsLine(e.target.value)} className="font-mono text-xs" />
                   <div className="text-[11px] text-muted-foreground">
                     Tersedia variabel <code>{"{total_per_supplier}"}</code> pada template utama (Gabungan default sudah memuatnya).<br/>
-                    Variabel baris: <code>{"{supplier} {jumlah} {subtotal}"}</code>
+                    Variabel baris: <code>{"{supplier} {jumlah} {subtotal} {rekening}"}</code>
                   </div>
                 </div>
                 <div className="space-y-2 pt-2 border-t">
