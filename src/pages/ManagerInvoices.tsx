@@ -469,6 +469,11 @@ export default function ManagerInvoices() {
         .split("{supplier}").join(name)
         .split("{jumlah}").join(String(v.jumlah))
         .split("{subtotal}").join(formatRupiah(v.subtotal))
+        .split("{rekening}").join((() => {
+          const b = supplierBank[name];
+          if (!b || (!b.bank_name && !b.bank_account)) return "(belum ada rekening)";
+          return `${b.bank_name ?? "-"} ${b.bank_account ?? "-"}${b.account_holder ? ` a.n. ${b.account_holder}` : ""}`;
+        })())
       ).join("\n") || "(tidak ada)";
     const tplVars = (s: string) => s
       .split("{cabang}").join(activeBranch?.name ?? "-")
@@ -1481,7 +1486,7 @@ export default function ManagerInvoices() {
                   <Textarea rows={2} value={waTotalsLine} onChange={(e) => setWaTotalsLine(e.target.value)} className="font-mono text-xs" />
                   <div className="text-[11px] text-muted-foreground">
                     Tersedia variabel <code>{"{total_per_supplier}"}</code> pada template utama (Gabungan default sudah memuatnya).<br/>
-                    Variabel baris: <code>{"{supplier} {jumlah} {subtotal}"}</code>
+                    Variabel baris: <code>{"{supplier} {jumlah} {subtotal} {rekening}"}</code>
                   </div>
                 </div>
                 <div className="space-y-2 pt-2 border-t">
