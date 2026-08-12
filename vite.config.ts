@@ -14,23 +14,10 @@ export default defineConfig(({ mode }) => ({
     },
   },
   build: {
-    rollupOptions: {
-      output: {
-        // Code-splitting: memecah bundle per vendor agar ukuran tiap chunk
-        // kecil dan peak memory parser (wasm) tidak melampaui batas RAM.
-        manualChunks(id: string) {
-          if (!id.includes("node_modules")) return;
-          if (id.includes("recharts") || id.includes("/d3-") || id.includes("victory-vendor")) return "charts";
-          if (id.includes("react-router") || id.includes("history")) return "router";
-          if (id.includes("@supabase")) return "supabase";
-          if (id.includes("lucide-react")) return "icons";
-          if (id.includes("xlsx") || id.includes("jspdf") || id.includes("html2canvas") || id.includes("jszip")) return "export";
-          if (id.includes("date-fns")) return "date";
-          if (id.includes("react") || id.includes("scheduler") || id.includes("/redux")) return "react";
-          return "vendor";
-        },
-      },
-    },
+    // Biarkan Rollup menentukan chunk otomatis. manualChunks manual sebelumnya
+    // memecah React ke chunk terpisah dan menyebabkan error
+    // "Cannot read properties of undefined (reading 'createContext')".
+    chunkSizeWarningLimit: 1600,
   },
   plugins: [
     react(),
