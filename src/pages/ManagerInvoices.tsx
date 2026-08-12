@@ -469,6 +469,11 @@ export default function ManagerInvoices() {
         .split("{supplier}").join(name)
         .split("{jumlah}").join(String(v.jumlah))
         .split("{subtotal}").join(formatRupiah(v.subtotal))
+        .split("{rekening}").join((() => {
+          const b = supplierBank[name];
+          if (!b || (!b.bank_name && !b.bank_account)) return "(belum ada rekening)";
+          return `${b.bank_name ?? "-"} ${b.bank_account ?? "-"}${b.account_holder ? ` a.n. ${b.account_holder}` : ""}`;
+        })())
       ).join("\n") || "(tidak ada)";
     const tplVars = (s: string) => s
       .split("{cabang}").join(activeBranch?.name ?? "-")
