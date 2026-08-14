@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { Trash2, Plus, Pencil, Save, X, Download, Upload, FileSpreadsheet, Store } from "lucide-react";
+import { Trash2, Plus, Pencil, Save, X, Download, Upload, FileSpreadsheet, Store, RefreshCw } from "lucide-react";
 import { LoadingBlock } from "@/components/LoadingBlock";
 import { EmptyState } from "@/components/EmptyState";
 
@@ -61,6 +61,7 @@ export default function ManagerSuppliers() {
   const activeBranchId = activeBranch?.id;
   const [list, setList] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
   const [bankName, setBankName] = useState("");
@@ -82,10 +83,14 @@ export default function ManagerSuppliers() {
   const load = useCallback(async () => {
     if (!activeBranchId) return;
     setLoading(true);
+    setLoadError(false);
     const res = await supabase.from("suppliers")
       .select("id, name, note, bank_name, bank_account, account_holder, phone, items")
       .eq("branch_id", activeBranchId).order("name");
-    if (res.error) toast.error(res.error.message);
+    if (res.error) {
+      setLoadError(true);
+      toast.error(res.error.message);
+    }
     setList((res.data ?? []) as Supplier[]);
     setLoading(false);
   }, [activeBranchId]);
@@ -219,6 +224,19 @@ export default function ManagerSuppliers() {
             <input ref={fileRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onFile} />
           </div>
           {loading ? <LoadingBlock rows={5} />
+           : loadError ? (
+             <EmptyState
+               icon={<RefreshCw className="h-6 w-6" />}
+               title="Gagal memuat supplier"
+               description="Terjadi kesalahan saat mengambil data. Periksa koneksi lalu coba lagi."
+               action={
+                 <Button size="sm" variant="outline" onClick={load}>
+                   <RefreshCw className="h-4 w-4 mr-1.5" /> Coba lagi
+                 </Button>
+               }
+               compact
+             />
+           )
            : list.length === 0 ? (
              <EmptyState
                icon={<Store className="h-6 w-6" />}

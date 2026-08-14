@@ -53,15 +53,15 @@ const Index = () => {
           </div>
           <div className="pt-4">
             <div className="text-xs font-semibold uppercase text-muted-foreground">Total Tagihan Hari Ini</div>
-            <div className="text-xl font-semibold mt-1">Rp 12.450.000</div>
+            <div className="text-xl font-semibold mt-1 tabular-nums">Rp 12.450.000</div>
             <div className="grid grid-cols-2 gap-3 mt-4">
               <div className="rounded-md p-3 bg-muted border">
                 <div className="text-[11px] font-medium uppercase text-muted-foreground">Belum</div>
-                <div className="text-lg font-semibold">Rp 7.200.000</div>
+                <div className="text-lg font-semibold tabular-nums">Rp 7.200.000</div>
               </div>
               <div className="rounded-md p-3 bg-muted border">
                 <div className="text-[11px] font-medium uppercase text-muted-foreground">Sudah</div>
-                <div className="text-lg font-semibold text-success">Rp 5.250.000</div>
+                <div className="text-lg font-semibold text-success tabular-nums">Rp 5.250.000</div>
               </div>
             </div>
             <div className="mt-4 space-y-2">
@@ -69,8 +69,8 @@ const Index = () => {
                 <div key={s} className="flex justify-between items-center px-3 py-2 text-sm border rounded-md bg-background">
                   <span className="font-medium">{s}</span>
                   <div className="flex items-center gap-2">
-                    <span className="font-mono text-xs">{t}</span>
-                    <span className={`status-pill ${st === "SUDAH" ? "bg-success/10 text-success" : "bg-warning/15 text-warning-foreground"}`}>{st}</span>
+                    <span className="font-mono text-xs tabular-nums">{t}</span>
+                    <span className={`status-pill ${st === "SUDAH" ? "bg-success-bg text-success" : "bg-warning-bg text-warning"}`}>{st}</span>
                   </div>
                 </div>
               ))}

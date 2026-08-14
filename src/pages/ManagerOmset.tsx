@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { TrendingUp, Plus, Pencil, Trash2, Save, X, Calendar, Wallet, BarChart3 } from "lucide-react";
+import { TrendingUp, Plus, Pencil, Trash2, Save, X, Calendar, Wallet, BarChart3, RefreshCw } from "lucide-react";
 import { LoadingBlock } from "@/components/LoadingBlock";
 import { EmptyState } from "@/components/EmptyState";
 
@@ -23,6 +23,7 @@ export default function ManagerOmset() {
   const activeBranchId = activeBranch?.id;
   const [list, setList] = useState<Revenue[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
@@ -42,11 +43,15 @@ export default function ManagerOmset() {
   const load = useCallback(async () => {
     if (!activeBranchId) return;
     setLoading(true);
+    setLoadError(false);
     const { data, error } = await supabase.from("daily_revenues" as any)
       .select("id, revenue_date, amount, note")
       .eq("branch_id", activeBranchId)
       .order("revenue_date", { ascending: false });
-    if (error) toast.error(error.message);
+    if (error) {
+      setLoadError(true);
+      toast.error(error.message);
+    }
     setList(((data ?? []) as unknown) as Revenue[]);
     setLoading(false);
   }, [activeBranchId]);
@@ -122,6 +127,19 @@ export default function ManagerOmset() {
             <div className="space-y-1"><Label className="text-xs">Sampai</Label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-8" /></div>
           </div>
           {loading ? <LoadingBlock rows={5} />
+           : loadError ? (
+             <EmptyState
+               icon={<RefreshCw className="h-6 w-6" />}
+               title="Gagal memuat omset"
+               description="Terjadi kesalahan saat mengambil data. Periksa koneksi lalu coba lagi."
+               action={
+                 <Button variant="outline" size="sm" onClick={load}>
+                   <RefreshCw className="h-4 w-4 mr-1.5" /> Coba lagi
+                 </Button>
+               }
+               compact
+             />
+           )
            : filtered.length === 0 ? (
              <EmptyState
                icon={<Calendar className="h-6 w-6" />}
@@ -150,8 +168,8 @@ export default function ManagerOmset() {
                         </>
                       ) : (
                         <>
-                          <td className="p-3 whitespace-nowrap">{formatDate(r.revenue_date)}</td>
-                          <td className="p-3 text-right font-semibold">{formatRupiah(Number(r.amount))}</td>
+                          <td className="p-3 whitespace-nowrap tabular-nums">{formatDate(r.revenue_date)}</td>
+                          <td className="p-3 text-right font-semibold tabular-nums">{formatRupiah(Number(r.amount))}</td>
                           <td className="p-3 text-muted-foreground">{r.note ?? "-"}</td>
                           <td className="p-3 text-right whitespace-nowrap">
                             <Button size="icon" variant="ghost" onClick={() => startEdit(r)}><Pencil className="h-4 w-4" /></Button>
@@ -172,13 +190,13 @@ export default function ManagerOmset() {
 }
 
 function Stat({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: "primary" | "success" | "warning" }) {
-  const t = tone === "success" ? "bg-success/10 text-success" : tone === "warning" ? "bg-warning/15 text-warning-foreground" : "bg-primary/10 text-primary";
+  const t = tone === "success" ? "bg-success-bg text-success" : tone === "warning" ? "bg-warning-bg text-warning" : "bg-primary/10 text-primary";
   return (
     <div className="app-card p-3 flex items-center gap-3">
       <div className={`h-10 w-10 grid place-items-center rounded-lg ${t}`}>{icon}</div>
       <div className="min-w-0">
         <div className="text-xs text-muted-foreground truncate">{label}</div>
-        <div className="font-semibold text-base truncate">{value}</div>
+        <div className="font-semibold text-base truncate tabular-nums">{value}</div>
       </div>
     </div>
   );

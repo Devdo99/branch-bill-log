@@ -12,7 +12,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ShieldCheck, UserPlus, Trash2, Save } from "lucide-react";
+import { ShieldCheck, UserPlus, Trash2, Save, RefreshCw } from "lucide-react";
 import { LoadingBlock } from "@/components/LoadingBlock";
 import { EmptyState } from "@/components/EmptyState";
 
@@ -45,6 +45,7 @@ export default function ManagerAdmins() {
   const activeBranchId = activeBranch?.id;
   const [rows, setRows] = useState<AdminRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [creating, setCreating] = useState(false);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -55,11 +56,15 @@ export default function ManagerAdmins() {
   const load = useCallback(async () => {
     if (!activeBranchId) return;
     setLoading(true);
+    setLoadError(false);
     const { data, error } = await (supabase.from("admin_permissions" as any) as any)
       .select("*")
       .eq("branch_id", activeBranchId)
       .order("created_at", { ascending: false });
-    if (error) toast.error(error.message);
+    if (error) {
+      setLoadError(true);
+      toast.error(error.message);
+    }
     const list = (data ?? []) as AdminRow[];
     const ids = list.map((r) => r.user_id);
     if (ids.length) {
@@ -129,6 +134,19 @@ export default function ManagerAdmins() {
         <div className="space-y-4">
           {loading ? (
             <div className="app-card"><LoadingBlock rows={3} /></div>
+          ) : loadError ? (
+            <div className="app-card">
+              <EmptyState
+                icon={<RefreshCw className="h-6 w-6" />}
+                title="Gagal memuat daftar admin"
+                description="Terjadi kesalahan saat mengambil data. Periksa koneksi lalu coba lagi."
+                action={
+                  <Button variant="outline" size="sm" onClick={load}>
+                    <RefreshCw className="h-4 w-4 mr-1.5" /> Coba lagi
+                  </Button>
+                }
+              />
+            </div>
           ) : rows.length === 0 ? (
             <div className="app-card">
               <EmptyState

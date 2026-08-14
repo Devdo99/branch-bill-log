@@ -1,16 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import AppShell from "@/components/AppShell";
 import { useBranch } from "@/contexts/BranchContext";
 import { supabase } from "@/integrations/supabase/client";
 import { formatRupiah, formatRupiahCompact } from "@/lib/format";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, CartesianGrid, ComposedChart, Area } from "recharts";
-import { TrendingUp, AlertCircle, AlertTriangle, CheckCircle2, Receipt, Package, Truck, Building2, Crown, Calendar, Wallet, BarChart3, LineChart as LineIcon, Coins, Percent, ArrowUpRight, ArrowDownRight, Scale, FilePlus2, ListChecks } from "lucide-react";
+import { TrendingUp, AlertCircle, AlertTriangle, CheckCircle2, Receipt, Package, Truck, Building2, Crown, Calendar, Wallet, BarChart3, LineChart as LineIcon, Coins, Percent, ArrowUpRight, ArrowDownRight, Scale, FilePlus2, ListChecks, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { LoadingPage } from "@/components/LoadingBlock";
 import { EmptyState } from "@/components/EmptyState";
+import { Button } from "@/components/ui/button";
 
 interface Inv { id: string; supplier: string; item_name: string; qty: number; price: number; total: number; status: "BELUM" | "SUDAH"; invoice_date: string; branch_id: string }
 interface Rev { id: string; branch_id: string; revenue_date: string; amount: number }
@@ -44,8 +45,12 @@ export default function ManagerDashboard() {
     setFrom(fmtDate(f)); setTo(fmtDate(t));
   }, [periodMode, year, month, quarter, semester]);
 
-  useEffect(() => {
-    (async () => {
+  const [loadError, setLoadError] = useState(false);
+
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    setLoadError(false);
+    try {
       const [{ data: invs }, { data: brs }, { data: revs }] = await Promise.all([
         supabase.from("invoices").select("id, supplier, item_name, qty, price, total, status, invoice_date, branch_id"),
         supabase.from("branches").select("id, name"),
@@ -54,9 +59,14 @@ export default function ManagerDashboard() {
       setAllInv((invs ?? []) as Inv[]);
       setBranches(brs ?? []);
       setAllRev(((revs ?? []) as unknown) as Rev[]);
+    } catch (e) {
+      console.error(e);
+      setLoadError(true);
+    } finally {
       setLoading(false);
-    })();
+    }
   }, []);
+  useEffect(() => { loadAll(); }, [loadAll]);
 
   const branchInv = useMemo(() => allInv.filter((i) => {
     if (i.branch_id !== activeBranch?.id) return false;
@@ -248,9 +258,29 @@ export default function ManagerDashboard() {
     .sort((a, b) => b.invoice_date.localeCompare(a.invoice_date))
     .slice(0, 4), [branchInv]);
 
-  const COLORS = ["hsl(198 78% 42%)", "hsl(221 70% 50%)", "hsl(151 62% 38%)", "hsl(38 88% 54%)", "hsl(262 58% 58%)", "hsl(218 15% 52%)"];
+  // Warna chart dari design token (PROGRAMER.md section 1)
+  const COLORS = ["hsl(var(--primary))", "hsl(var(--gold))", "hsl(var(--success))", "hsl(var(--warning))", "hsl(var(--destructive))", "hsl(var(--muted-foreground))"];
 
   if (loading) return <AppShell title="Dashboard"><LoadingPage label="Memuat dashboard…" /></AppShell>;
+
+  if (loadError) {
+    return (
+      <AppShell title="Dashboard">
+        <div className="app-card">
+          <EmptyState
+            icon={<AlertTriangle className="h-6 w-6" />}
+            title="Gagal memuat dashboard"
+            description="Terjadi kesalahan saat mengambil data. Periksa koneksi lalu coba lagi."
+            action={
+              <Button variant="outline" onClick={loadAll}>
+                <RefreshCw className="h-4 w-4 mr-1.5" /> Coba lagi
+              </Button>
+            }
+          />
+        </div>
+      </AppShell>
+    );
+  }
 
   return (
     <AppShell title={`Dashboard - ${activeBranch?.name}`}>
@@ -352,12 +382,13 @@ export default function ManagerDashboard() {
                   <AlertCircle className="h-4 w-4 text-warning" /> {branchUnpaid.length} nota belum dibayar
                 </span>
                 <span className="text-muted-foreground">•</span>
-                <span className="tabular-nums text-warning-foreground">{formatRupiah(branchUnpaidTotal)}</span>
+                <span className="tabular-nums text-warning">{formatRupiah(branchUnpaidTotal)}</span>
               </div>
               <div className="mt-1 text-xs text-muted-foreground">
                 {branchOverdue.length > 0 ? (
-                  <span className="font-medium text-destructive">
-                    ⚠ {branchOverdue.length} di antaranya lewat jatuh tempo ({formatRupiah(branchOverdueTotal)}) — segera tindak lanjuti.
+                  <span className="inline-flex items-center gap-1 font-medium text-destructive">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    {branchOverdue.length} di antaranya lewat jatuh tempo ({formatRupiah(branchOverdueTotal)}) — segera tindak lanjuti.
                   </span>
                 ) : (
                   <span>Belum dibayar (semua periode). Tandai lunas setelah pembayaran dilakukan.</span>
@@ -409,7 +440,7 @@ export default function ManagerDashboard() {
               <h3 className="font-semibold">Perlu Perhatian</h3>
               <p className="text-xs text-muted-foreground">Nota belum dibayar dalam periode aktif</p>
             </div>
-            <span className={`status-pill ${overdueTotal > 0 ? "bg-warning/15 text-warning-foreground" : "bg-success/10 text-success"}`}>
+            <span className={`status-pill ${overdueTotal > 0 ? "bg-warning-bg text-warning" : "bg-success-bg text-success"}`}>
               {overdueTotal > 0 ? "cek" : "aman"}
             </span>
           </div>
@@ -417,7 +448,7 @@ export default function ManagerDashboard() {
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <AlertCircle className="h-4 w-4 text-warning" /> Lewat hari ini
             </div>
-            <div className="mt-1 text-xl font-semibold">{formatRupiah(overdueTotal)}</div>
+            <div className="mt-1 text-xl font-semibold tabular-nums">{formatRupiah(overdueTotal)}</div>
           </div>
           <div className="mt-3 space-y-2">
             {latestUnpaid.length === 0 ? (
@@ -497,7 +528,7 @@ export default function ManagerDashboard() {
               <XAxis dataKey="date" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v) => formatRupiahCompact(v)} />
               <Tooltip formatter={(v: number) => formatRupiah(v)} />
-              <Line type="monotone" dataKey="omset" name="Omset" stroke="hsl(198 78% 42%)" strokeWidth={2.5} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="omset" name="Omset" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -517,9 +548,9 @@ export default function ManagerDashboard() {
               <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v) => formatRupiahCompact(v)} />
               <Tooltip formatter={(v: number) => formatRupiah(v)} />
               <Legend />
-              <Bar dataKey="omset" name="Omset" fill="hsl(198 78% 42%)" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="bahan" name="Bahan Baku" fill="hsl(38 92% 55%)" radius={[4, 4, 0, 0]} />
-              <Line type="monotone" dataKey="laba" name="Laba Kotor" stroke="hsl(222 38% 24%)" strokeWidth={2} dot={false} />
+              <Bar dataKey="omset" name="Omset" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="bahan" name="Bahan Baku" fill="hsl(var(--gold))" radius={[4, 4, 0, 0]} />
+              <Line type="monotone" dataKey="laba" name="Laba Kotor" stroke="hsl(var(--primary-dark))" strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         )}
@@ -534,7 +565,7 @@ export default function ManagerDashboard() {
               <XAxis dataKey="date" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v) => formatRupiahCompact(v)} />
               <Tooltip formatter={(v: number) => formatRupiah(v)} />
-              <Line type="monotone" dataKey="total" stroke="hsl(198 78% 42%)" strokeWidth={2.5} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="total" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -564,7 +595,7 @@ export default function ManagerDashboard() {
             <div className="bg-accent/40 rounded-lg p-2"><div className="text-xs text-muted-foreground">Min – Max</div><div className="font-semibold text-xs">{formatRupiahCompact(priceStats.min)} – {formatRupiahCompact(priceStats.max)}</div></div>
             <div className={`rounded-lg p-2 ${priceStats.change >= 0 ? "bg-warning/20" : "bg-success/20"}`}>
               <div className="text-xs text-muted-foreground">Perubahan</div>
-              <div className={`font-semibold ${priceStats.change >= 0 ? "text-warning-foreground" : "text-success"}`}>
+              <div className={`font-semibold ${priceStats.change >= 0 ? "text-warning" : "text-success"}`}>
                 {priceStats.change >= 0 ? "▲" : "▼"} {Math.abs(priceStats.change).toFixed(1)}%
               </div>
             </div>
@@ -577,7 +608,7 @@ export default function ManagerDashboard() {
               <XAxis dataKey="date" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v) => formatRupiahCompact(v)} />
               <Tooltip formatter={(v: number) => formatRupiah(v)} />
-              <Line type="monotone" dataKey="price" name="Harga rata-rata" stroke="hsl(38 92% 55%)" strokeWidth={2.5} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="price" name="Harga rata-rata" stroke="hsl(var(--gold))" strokeWidth={2.5} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -592,7 +623,7 @@ export default function ManagerDashboard() {
                 <XAxis dataKey="supplier" tick={{ fontSize: 11 }} />
                 <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v) => formatRupiahCompact(v)} />
                 <Tooltip formatter={(v: number) => formatRupiah(v)} />
-                <Bar dataKey="total" fill="hsl(198 78% 42%)" radius={[6,6,0,0]} />
+                <Bar dataKey="total" fill="hsl(var(--primary))" radius={[6,6,0,0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -605,7 +636,7 @@ export default function ManagerDashboard() {
                 <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => formatRupiahCompact(v)} />
                 <YAxis type="category" dataKey="item" width={90} tick={{ fontSize: 11 }} />
                 <Tooltip formatter={(v: number) => formatRupiah(v)} />
-                <Bar dataKey="total" fill="hsl(38 92% 55%)" radius={[0,6,6,0]} />
+                <Bar dataKey="total" fill="hsl(var(--gold))" radius={[0,6,6,0]} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -853,7 +884,7 @@ function StatCard({ icon, label, value, helper, accent }: { icon: React.ReactNod
     <div className="app-card p-5 flex min-h-[132px] items-start justify-between gap-3">
       <div className="min-w-0">
         <div className="text-sm text-muted-foreground">{label}</div>
-        <div className="mt-1 truncate text-xl font-semibold">{value}</div>
+        <div className="mt-1 truncate text-xl font-semibold tabular-nums">{value}</div>
         {helper && <div className="mt-2 text-xs text-muted-foreground">{helper}</div>}
       </div>
       <div className={`grid h-10 w-10 place-items-center rounded-lg ${colorMap[accent]}`}>{icon}</div>
@@ -864,15 +895,15 @@ function StatCard({ icon, label, value, helper, accent }: { icon: React.ReactNod
 function KpiTile({ icon, label, value, helper, tone }: { icon: React.ReactNode; label: string; value: string; helper: string; tone: "primary" | "warning" | "success" | "danger" }) {
   const toneMap: Record<string, string> = {
     primary: "bg-primary/10 text-primary",
-    warning: "bg-warning/15 text-warning-foreground",
-    success: "bg-success/10 text-success",
-    danger: "bg-destructive/10 text-destructive",
+    warning: "bg-warning-bg text-warning",
+    success: "bg-success-bg text-success",
+    danger: "bg-destructive-bg text-destructive",
   };
   return (
     <div className="min-h-[138px] bg-card p-4">
       <div className={`mb-3 inline-flex h-8 w-8 items-center justify-center rounded-md ${toneMap[tone]}`}>{icon}</div>
       <div className="text-xs font-medium uppercase text-muted-foreground">{label}</div>
-      <div className="mt-1 text-xl font-semibold leading-tight">{value}</div>
+      <div className="mt-1 text-xl font-semibold leading-tight tabular-nums">{value}</div>
       <div className="mt-2 text-xs text-muted-foreground">{helper}</div>
     </div>
   );
@@ -895,7 +926,7 @@ function MiniStat({ icon, label, value }: { icon: React.ReactNode; label: string
       <div className="grid h-9 w-9 place-items-center rounded-lg bg-accent text-accent-foreground">{icon}</div>
       <div className="min-w-0">
         <div className="text-xs text-muted-foreground">{label}</div>
-        <div className="font-semibold truncate">{value}</div>
+        <div className="font-semibold truncate tabular-nums">{value}</div>
       </div>
     </div>
   );
@@ -908,7 +939,7 @@ function DarkStat({ icon, label, value, delta, invertDelta, accent }: { icon: Re
   return (
     <div className="rounded-lg border border-primary/10 bg-background/85 p-3 shadow-card">
       <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">{icon}{label}</div>
-      <div className={`font-semibold text-base mt-1 ${valueCls}`}>{value}</div>
+      <div className={`font-semibold text-base mt-1 tabular-nums ${valueCls}`}>{value}</div>
       {showDelta && (
         <div className={`text-[11px] mt-0.5 flex items-center gap-0.5 ${positive ? "text-success" : "text-warning"}`}>
           {delta! > 0 ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}

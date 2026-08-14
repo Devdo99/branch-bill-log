@@ -99,7 +99,7 @@ function ShellNavItem({ item, active }: { item: NavItem; active: boolean }) {
           </span>
           <span className="truncate">{item.label}</span>
           {active && (
-            <span className="absolute right-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-sidebar-primary group-data-[collapsible=icon]:hidden" />
+            <span className="absolute right-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-sidebar-primary transition-all duration-300 ease-out group-data-[collapsible=icon]:hidden" />
           )}
         </Link>
       </SidebarMenuButton>
@@ -333,7 +333,7 @@ export default function AppShell({ children, title }: Props) {
               className="group/br flex w-full items-center gap-2.5 rounded-md border border-sidebar-border/70 bg-sidebar-accent/30 px-2.5 py-2 text-left text-sm text-sidebar-foreground transition-colors hover:border-sidebar-primary/50 hover:bg-sidebar-accent/60 group-data-[collapsible=icon]:h-10 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
               title={activeBranch.name}
             >
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-sidebar-primary text-white">
+              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground">
                 <Building2 className="h-3.5 w-3.5" />
               </span>
               <span className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">

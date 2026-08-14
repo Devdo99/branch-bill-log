@@ -32,6 +32,7 @@ export default function KasirInputNota() {
     invoice_date: new Date().toISOString().slice(0, 10),
     supplier: "", item_name: "", qty: "1", price: "0",
   });
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [photo, setPhoto] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -62,6 +63,20 @@ export default function KasirInputNota() {
 
   const total = (Number(form.qty) || 0) * (Number(form.price) || 0);
 
+  // Format ribuan otomatis saat mengetik nominal (PROGRAMER.md section 3.3)
+  const formatThousands = (s: string) => {
+    const digits = s.replace(/\D/g, "");
+    if (!digits) return "";
+    return Number(digits).toLocaleString("id-ID");
+  };
+  const clearErr = (key: string) =>
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  const err = (key: string) => fieldErrors[key] ? <p className="text-xs font-medium text-destructive">{fieldErrors[key]}</p> : null;
+
   const onPhoto = (f: File | null) => {
     setPhoto(f);
     if (f) setPreview(URL.createObjectURL(f)); else setPreview(null);
@@ -75,7 +90,16 @@ export default function KasirInputNota() {
       supplier: form.supplier, item_name: form.item_name,
       qty: Number(form.qty), price: Number(form.price),
     });
-    if (!parsed.success) { toast.error(parsed.error.issues[0].message); return; }
+    if (!parsed.success) {
+      const errs: Record<string, string> = {};
+      parsed.error.issues.forEach((iss) => {
+        const p = iss.path[0];
+        if (typeof p === "string") errs[p] = iss.message;
+      });
+      setFieldErrors(errs);
+      return;
+    }
+    setFieldErrors({});
     setSaving(true);
     try {
       let photo_path: string | null = null;
@@ -97,7 +121,7 @@ export default function KasirInputNota() {
         created_by: user.id,
       });
       if (error) throw error;
-      toast.success("Nota tersimpan");
+      toast.success("Nota disimpan");
       nav("/kasir");
     } catch (e: any) { toast.error(e.message); }
     finally { setSaving(false); }
@@ -113,7 +137,7 @@ export default function KasirInputNota() {
       <form onSubmit={submit} className="grid lg:grid-cols-3 gap-6 max-w-5xl">
         <div className="lg:col-span-2 app-card p-6 space-y-4">
           <div className="grid sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5"><Label>Tanggal Nota</Label><Input type="date" value={form.invoice_date} onChange={(e) => setForm({ ...form, invoice_date: e.target.value })} required /></div>
+            <div className="space-y-1.5"><Label>Tanggal Nota</Label><Input type="date" value={form.invoice_date} onChange={(e) => { setForm({ ...form, invoice_date: e.target.value }); clearErr("invoice_date"); }} required />{err("invoice_date")}</div>
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <Label>Supplier</Label>
@@ -138,8 +162,9 @@ export default function KasirInputNota() {
                   </Select>
                 )
               ) : (
-                <Input value={form.supplier} onChange={(e) => setForm({ ...form, supplier: e.target.value })} placeholder="Nama supplier baru" required />
+                <Input value={form.supplier} onChange={(e) => { setForm({ ...form, supplier: e.target.value }); clearErr("supplier"); }} placeholder="Nama supplier baru" required />
               )}
+              {err("supplier")}
             </div>
           </div>
 
@@ -167,17 +192,18 @@ export default function KasirInputNota() {
                 </SelectContent>
               </Select>
             ) : (
-              <Input value={form.item_name} onChange={(e) => setForm({ ...form, item_name: e.target.value })} placeholder="cth: Beras Pandanwangi" required />
+              <Input value={form.item_name} onChange={(e) => { setForm({ ...form, item_name: e.target.value }); clearErr("item_name"); }} placeholder="cth: Beras Pandanwangi" required />
             )}
+            {err("item_name")}
           </div>
 
           <div className="grid sm:grid-cols-2 gap-4">
-            <div className="space-y-1.5"><Label>Qty</Label><Input type="number" min={0.01} step="0.01" value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} required /></div>
-            <div className="space-y-1.5"><Label>Harga Satuan</Label><Input type="number" min={0} step="1" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })} required /></div>
+            <div className="space-y-1.5"><Label>Qty</Label><Input type="number" min={0.01} step="0.01" value={form.qty} onChange={(e) => { setForm({ ...form, qty: e.target.value }); clearErr("qty"); }} required />{err("qty")}</div>
+            <div className="space-y-1.5"><Label>Harga Satuan (Rp)</Label><Input type="text" inputMode="numeric" value={formatThousands(form.price)} onChange={(e) => { setForm({ ...form, price: e.target.value.replace(/\D/g, "") }); clearErr("price"); }} placeholder="cth: 25.000" required />{err("price")}</div>
           </div>
           <div className="rounded-lg border bg-muted/60 p-4 flex justify-between items-center">
             <span className="text-sm opacity-80">Total</span>
-            <span className="text-xl font-semibold text-primary">{formatRupiah(total)}</span>
+            <span className="text-xl font-semibold text-primary tabular-nums">{formatRupiah(total)}</span>
           </div>
           <Button type="submit" disabled={saving} className="w-full shadow-card" size="lg">
             {saving ? "Menyimpan..." : "Simpan Nota"}

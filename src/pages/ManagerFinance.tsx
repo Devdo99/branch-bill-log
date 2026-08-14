@@ -67,6 +67,7 @@ export default function ManagerFinance() {
   const [revenues, setRevenues] = useState<Revenue[]>([]);
   const [suppliers, setSuppliers] = useState<Record<string, Supplier>>({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   
   // Date Filters
   const [preset, setPreset] = useState<"bulan_ini" | "bulan_lalu" | "hari_30" | "tahun_ini" | "kustom">("bulan_ini");
@@ -105,6 +106,7 @@ export default function ManagerFinance() {
   const loadData = useCallback(async () => {
     if (!activeBranchId) return;
     setLoading(true);
+    setLoadError(false);
     try {
       // Fetch all invoices, revenues, and suppliers for this branch
       const [invRes, revRes, supRes] = await Promise.all([
@@ -136,6 +138,8 @@ export default function ManagerFinance() {
       });
       setSuppliers(supMap);
     } catch (e: any) {
+      console.error(e);
+      setLoadError(true);
       toast.error(e.message || "Gagal memuat data keuangan");
     } finally {
       setLoading(false);
@@ -342,6 +346,19 @@ export default function ManagerFinance() {
 
       {loading ? (
         <LoadingPage label="Memuat laporan keuangan…" />
+      ) : loadError ? (
+        <div className="app-card">
+          <EmptyState
+            icon={<RefreshCw className="h-6 w-6" />}
+            title="Gagal memuat laporan keuangan"
+            description="Terjadi kesalahan saat mengambil data. Periksa koneksi lalu coba lagi."
+            action={
+              <Button variant="outline" onClick={loadData}>
+                <RefreshCw className="h-4 w-4 mr-1.5" /> Coba lagi
+              </Button>
+            }
+          />
+        </div>
       ) : (
         <>
           {/* Top Finance Metrics Cards */}
@@ -356,7 +373,7 @@ export default function ManagerFinance() {
                 </div>
               </div>
               <div className="mt-4">
-                <div className="text-xl font-bold font-mono">{formatRupiah(totalOmset)}</div>
+                <div className="text-xl font-bold font-mono tabular-nums">{formatRupiah(totalOmset)}</div>
                 <p className="text-[10px] text-muted-foreground mt-1">Uang Masuk Terdaftar</p>
               </div>
             </div>
@@ -365,12 +382,12 @@ export default function ManagerFinance() {
             <div className="app-card p-4 flex flex-col justify-between">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-muted-foreground uppercase">Tagihan Terbayar</span>
-                <div className="h-8 w-8 rounded-full bg-warning/15 text-warning-foreground grid place-items-center">
+                <div className="h-8 w-8 rounded-full bg-warning-bg text-warning grid place-items-center">
                   <ArrowDownRight className="h-4 w-4" />
                 </div>
               </div>
               <div className="mt-4">
-                <div className="text-xl font-bold font-mono text-warning-foreground">{formatRupiah(totalPaidInvoices)}</div>
+                <div className="text-xl font-bold font-mono tabular-nums text-warning">{formatRupiah(totalPaidInvoices)}</div>
                 <p className="text-[10px] text-muted-foreground mt-1">Arus Kas Keluar Aktual</p>
               </div>
             </div>
@@ -384,7 +401,7 @@ export default function ManagerFinance() {
                 </div>
               </div>
               <div className="mt-4">
-                <div className={`text-xl font-bold font-mono ${netCashFlow >= 0 ? "text-success" : "text-destructive"}`}>
+                <div className={`text-xl font-bold font-mono tabular-nums ${netCashFlow >= 0 ? "text-success" : "text-destructive"}`}>
                   {formatRupiah(netCashFlow)}
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-1">Saldo Kas Riil (Omset - Terbayar)</p>
@@ -400,7 +417,7 @@ export default function ManagerFinance() {
                 </div>
               </div>
               <div className="mt-4">
-                <div className="text-xl font-bold font-mono text-destructive">{formatRupiah(totalUnpaidInvoices)}</div>
+                <div className="text-xl font-bold font-mono tabular-nums text-destructive">{formatRupiah(totalUnpaidInvoices)}</div>
                 <p className="text-[10px] text-muted-foreground mt-1">Kewajiban Pembayaran Pending</p>
               </div>
             </div>
@@ -414,7 +431,7 @@ export default function ManagerFinance() {
                 </div>
               </div>
               <div className="mt-4">
-                <div className={`text-xl font-bold font-mono ${netProfit >= 0 ? "text-success" : "text-destructive"}`}>
+                <div className={`text-xl font-bold font-mono tabular-nums ${netProfit >= 0 ? "text-success" : "text-destructive"}`}>
                   {formatRupiah(netProfit)}
                 </div>
                 <p className="text-[10px] text-muted-foreground mt-1">Estimasi Buku (Omset - Total Nota)</p>
@@ -459,7 +476,7 @@ export default function ManagerFinance() {
                       <Tooltip 
                         formatter={(value) => [formatRupiah(Number(value)), ""]}
                         labelFormatter={(label) => `Tanggal: ${label}`}
-                        contentStyle={{ backgroundColor: "white", borderRadius: 8, border: "1px solid #e2e8f0" }}
+                        contentStyle={{ backgroundColor: "hsl(var(--card))", borderRadius: 8, border: "1px solid hsl(var(--border))" }}
                       />
                       <Legend style={{ fontSize: 11 }} />
                       <Area 
@@ -513,7 +530,7 @@ export default function ManagerFinance() {
                   <div className="space-y-1.5 text-sm px-1">
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Nota Lunas (Sudah Dibayar)</span>
-                      <span className="font-mono text-warning-foreground">({formatRupiah(totalPaidInvoices)})</span>
+                      <span className="font-mono tabular-nums text-warning">({formatRupiah(totalPaidInvoices)})</span>
                     </div>
                     <div className="flex justify-between items-center">
                       <span className="text-muted-foreground">Nota Hutang (Belum Dibayar)</span>

@@ -6,21 +6,26 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Building2, Plus, Trash2 } from "lucide-react";
+import { Building2, Plus, Trash2, RefreshCw } from "lucide-react";
 import { LoadingBlock } from "@/components/LoadingBlock";
 import { EmptyState } from "@/components/EmptyState";
 
 export default function ManagerBranches() {
   const [branches, setBranches] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [pin, setPin] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = async () => {
+    setLoadError(false);
     const { data, error } = await supabase.from("branches").select("id, name").order("created_at");
-    if (error) toast.error(error.message);
+    if (error) {
+      setLoadError(true);
+      toast.error(error.message);
+    }
     setBranches(data ?? []);
     setLoading(false);
   };
@@ -64,7 +69,20 @@ export default function ManagerBranches() {
         </Dialog>
       </div>
 
-      {loading ? <LoadingBlock rows={3} /> : branches.length === 0 ? (
+      {loading ? <LoadingBlock rows={3} /> : loadError ? (
+        <div className="app-card">
+          <EmptyState
+            icon={<RefreshCw className="h-6 w-6" />}
+            title="Gagal memuat cabang"
+            description="Terjadi kesalahan saat mengambil data. Periksa koneksi lalu coba lagi."
+            action={
+              <Button variant="outline" size="sm" onClick={load}>
+                <RefreshCw className="h-4 w-4 mr-1.5" /> Coba lagi
+              </Button>
+            }
+          />
+        </div>
+      ) : branches.length === 0 ? (
         <div className="app-card">
           <EmptyState
             icon={<Building2 className="h-6 w-6" />}

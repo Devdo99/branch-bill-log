@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/EmptyState";
 import { LoadingBlock } from "@/components/LoadingBlock";
 import { StatusBadge } from "@/components/StatusBadge";
-import { Plus, Receipt, FilePlus2 } from "lucide-react";
+import { Plus, Receipt, FilePlus2, RefreshCw } from "lucide-react";
 
 interface Inv { id: string; invoice_date: string; supplier: string; item_name: string; total: number; status: string }
 
@@ -18,16 +18,25 @@ export default function KasirDashboard() {
   const branchId = branch?.id;
   const [invs, setInvs] = useState<Inv[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
-  useEffect(() => {
+  const load = async () => {
     if (!branchId) return;
-    (async () => {
-      const { data } = await supabase.from("invoices").select("id, invoice_date, supplier, item_name, total, status")
+    setLoading(true);
+    setLoadError(false);
+    try {
+      const { data, error } = await supabase.from("invoices").select("id, invoice_date, supplier, item_name, total, status")
         .eq("branch_id", branchId).order("created_at", { ascending: false }).limit(20);
+      if (error) throw error;
       setInvs((data ?? []) as Inv[]);
+    } catch (e) {
+      console.error(e);
+      setLoadError(true);
+    } finally {
       setLoading(false);
-    })();
-  }, [branchId]);
+    }
+  };
+  useEffect(() => { load(); }, [branchId]);
 
   if (!branch) return <AppShell title="Dashboard Kasir"><p className="text-muted-foreground">Anda belum ditugaskan ke cabang manapun. Hubungi manager.</p></AppShell>;
 
@@ -40,8 +49,8 @@ export default function KasirDashboard() {
       <div className="grid sm:grid-cols-2 gap-4">
         <div className="app-panel p-6">
           <div className="text-sm opacity-70">Total Nota Hari Ini</div>
-          <div className="text-2xl font-semibold mt-1">{todayCount} nota</div>
-          <div className="text-lg mt-1 text-primary font-semibold">{formatRupiah(todayTotal)}</div>
+          <div className="text-2xl font-semibold mt-1 tabular-nums">{todayCount} nota</div>
+          <div className="text-lg mt-1 text-primary font-semibold tabular-nums">{formatRupiah(todayTotal)}</div>
         </div>
         <Link to="/kasir/input" className="rounded-lg bg-primary text-primary-foreground p-6 shadow-card flex items-center justify-between transition hover:bg-primary/90">
           <div>
@@ -53,7 +62,20 @@ export default function KasirDashboard() {
       </div>
 
       <h2 className="font-semibold text-xl mt-8 mb-3">Nota Terbaru</h2>
-      {loading ? <LoadingBlock rows={5} /> : invs.length === 0 ? (
+      {loading ? <LoadingBlock rows={5} /> : loadError ? (
+        <div className="app-card">
+          <EmptyState
+            icon={<RefreshCw className="h-6 w-6" />}
+            title="Gagal memuat nota"
+            description="Terjadi kesalahan saat mengambil data. Periksa koneksi lalu coba lagi."
+            action={
+              <Button size="sm" variant="outline" onClick={load}>
+                <RefreshCw className="h-4 w-4 mr-1.5" /> Coba lagi
+              </Button>
+            }
+          />
+        </div>
+      ) : invs.length === 0 ? (
         <div className="app-card">
           <EmptyState
             icon={<Receipt className="h-6 w-6" />}
@@ -73,10 +95,10 @@ export default function KasirDashboard() {
             <tbody>
               {invs.map((i) => (
                 <tr key={i.id} className="border-t hover:bg-muted/35">
-                  <td className="p-3 whitespace-nowrap">{formatDate(i.invoice_date)}</td>
+                  <td className="p-3 whitespace-nowrap tabular-nums">{formatDate(i.invoice_date)}</td>
                   <td className="p-3">{i.supplier}</td>
                   <td className="p-3">{i.item_name}</td>
-                  <td className="p-3 text-right font-semibold">{formatRupiah(Number(i.total))}</td>
+                  <td className="p-3 text-right font-semibold tabular-nums">{formatRupiah(Number(i.total))}</td>
                   <td className="p-3">
                     <StatusBadge status={i.status} />
                   </td>

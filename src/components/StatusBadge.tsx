@@ -4,9 +4,9 @@ import { cn } from "@/lib/utils";
 type Tone = "success" | "warning" | "danger" | "neutral";
 
 const TONE_CLS: Record<Tone, string> = {
-  success: "bg-success/10 text-success border-success/25",
-  warning: "bg-warning/15 text-warning-foreground border-warning/30",
-  danger: "bg-destructive/10 text-destructive border-destructive/25",
+  success: "bg-success-bg text-success border-success/25",
+  warning: "bg-warning-bg text-warning border-warning/30",
+  danger: "bg-destructive-bg text-destructive border-destructive/25",
   neutral: "bg-muted text-muted-foreground border-border",
 };
 

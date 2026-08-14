@@ -127,7 +127,7 @@ export default function ManagerWhatsApp() {
                 ? "bg-success/10 text-success" 
                 : status === "offline"
                 ? "bg-destructive/10 text-destructive"
-                : "bg-warning/15 text-warning-foreground"
+                : "bg-warning-bg text-warning"
             }`}>
               {status === "connected" && <CheckCircle2 className="h-6 w-6" />}
               {status === "offline" && <WifiOff className="h-6 w-6" />}
@@ -159,7 +159,7 @@ export default function ManagerWhatsApp() {
             {status === "offline" && isLocalhost && (
               <Button onClick={handleSpawn} disabled={spawning} className="bg-primary hover:bg-primary/90 text-primary-foreground">
                 <Power className="h-4 w-4 mr-2" />
-                {spawning ? "Mengaktifkan..." : "🚀 Aktifkan Server WhatsApp"}
+                {spawning ? "Mengaktifkan..." : "Aktifkan Server WhatsApp"}
               </Button>
             )}
             {status === "disconnected" && !qrCode && (
@@ -246,7 +246,7 @@ export default function ManagerWhatsApp() {
             {isLocalhost ? (
               <Button onClick={handleSpawn} disabled={spawning} className="mt-6">
                 <Power className="h-4 w-4 mr-2" />
-                {spawning ? "Mengaktifkan..." : "🚀 Aktifkan Server WhatsApp"}
+                {spawning ? "Mengaktifkan..." : "Aktifkan Server WhatsApp"}
               </Button>
             ) : (
               <p className="text-xs text-muted-foreground mt-4">

@@ -69,6 +69,7 @@ export default function ManagerPayments() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [suppliers, setSuppliers] = useState<Record<string, Supplier>>({});
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   // Filters
   const [from, setFrom] = useState("");
@@ -107,6 +108,7 @@ export default function ManagerPayments() {
   const loadData = useCallback(async () => {
     if (!activeBranchId) return;
     setLoading(true);
+    setLoadError(false);
     try {
       const [invRes, supRes] = await Promise.all([
         supabase
@@ -130,6 +132,8 @@ export default function ManagerPayments() {
       });
       setSuppliers(supMap);
     } catch (e: any) {
+      console.error(e);
+      setLoadError(true);
       toast.error(e.message || "Gagal memuat data laporan pembayaran");
     } finally {
       setLoading(false);
@@ -482,6 +486,19 @@ export default function ManagerPayments() {
 
       {loading ? (
         <LoadingPage label="Memuat laporan pembayaran…" />
+      ) : loadError ? (
+        <div className="app-card">
+          <EmptyState
+            icon={<RefreshCw className="h-6 w-6" />}
+            title="Gagal memuat laporan pembayaran"
+            description="Terjadi kesalahan saat mengambil data. Periksa koneksi lalu coba lagi."
+            action={
+              <Button variant="outline" onClick={loadData}>
+                <RefreshCw className="h-4 w-4 mr-1.5" /> Coba lagi
+              </Button>
+            }
+          />
+        </div>
       ) : (
         <>
           {/* Summary Metrics Section */}
@@ -493,19 +510,19 @@ export default function ManagerPayments() {
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Total Lunas</p>
-                <h3 className="text-base font-bold text-foreground leading-tight mt-0.5">{formatRupiah(metrics.totalPaid)}</h3>
+                <h3 className="text-base font-bold text-foreground leading-tight mt-0.5 tabular-nums">{formatRupiah(metrics.totalPaid)}</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">{metrics.countPaid} Transaksi</p>
               </div>
             </div>
 
             {/* Unpaid Total Card */}
             <div className="app-card p-4 flex items-center gap-4">
-              <div className="h-10 w-10 rounded-md bg-warning/15 text-warning-foreground flex items-center justify-center shrink-0">
+              <div className="h-10 w-10 rounded-md bg-warning-bg text-warning flex items-center justify-center shrink-0">
                 <Clock className="h-5 w-5" />
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Total Belum Bayar</p>
-                <h3 className="text-base font-bold text-foreground leading-tight mt-0.5">{formatRupiah(metrics.totalUnpaid)}</h3>
+                <h3 className="text-base font-bold text-foreground leading-tight mt-0.5 tabular-nums">{formatRupiah(metrics.totalUnpaid)}</h3>
                 <p className="text-xs text-muted-foreground mt-0.5">{metrics.countUnpaid} Transaksi</p>
               </div>
             </div>
@@ -517,7 +534,7 @@ export default function ManagerPayments() {
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Total Tagihan Periode</p>
-                <h3 className="text-base font-bold text-foreground leading-tight mt-0.5">
+                <h3 className="text-base font-bold text-foreground leading-tight mt-0.5 tabular-nums">
                   {formatRupiah(metrics.totalPaid + metrics.totalUnpaid)}
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
@@ -533,7 +550,7 @@ export default function ManagerPayments() {
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Supplier Dibayar</p>
-                <h3 className="text-base font-bold text-foreground leading-tight mt-0.5">
+                <h3 className="text-base font-bold text-foreground leading-tight mt-0.5 tabular-nums">
                   {supplierSummary.length} Supplier
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">Nama sama otomatis digabung</p>
@@ -565,7 +582,7 @@ export default function ManagerPayments() {
                 </button>
                 <button
                   onClick={() => setSupSummaryFilter("unpaid")}
-                  className={`px-2.5 py-1 rounded-md transition-all ${supSummaryFilter === "unpaid" ? "bg-background font-semibold shadow-sm text-warning-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  className={`px-2.5 py-1 rounded-md transition-all ${supSummaryFilter === "unpaid" ? "bg-background font-semibold shadow-sm text-warning" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   Belum Lunas ({supplierSummary.filter((s) => s.unpaid > 0).length})
                 </button>
@@ -628,19 +645,19 @@ export default function ManagerPayments() {
                           <div className="flex items-center gap-4 text-[11px] shrink-0">
                             <div className="text-right">
                               <p className="text-[9px] uppercase text-muted-foreground">Belum Lunas</p>
-                              <p className={`font-semibold ${s.unpaid > 0 ? "text-warning-foreground" : "text-muted-foreground"}`}>
+                              <p className={`font-semibold tabular-nums ${s.unpaid > 0 ? "text-warning" : "text-muted-foreground"}`}>
                                 {formatRupiah(s.unpaid)}
                               </p>
                             </div>
                             <div className="text-right">
                               <p className="text-[9px] uppercase text-muted-foreground">Sudah Lunas</p>
-                              <p className={`font-semibold ${s.paid > 0 ? "text-success" : "text-muted-foreground"}`}>
+                              <p className={`font-semibold tabular-nums ${s.paid > 0 ? "text-success" : "text-muted-foreground"}`}>
                                 {formatRupiah(s.paid)}
                               </p>
                             </div>
                             <div className="text-right">
                               <p className="text-[9px] uppercase text-muted-foreground">Total</p>
-                              <p className="font-semibold text-foreground">{formatRupiah(s.paid + s.unpaid)}</p>
+                              <p className="font-semibold text-foreground tabular-nums">{formatRupiah(s.paid + s.unpaid)}</p>
                             </div>
                           </div>
                         </button>
@@ -679,7 +696,7 @@ export default function ManagerPayments() {
                                     {supplierInvoices.map((i, idx) => (
                                       <tr key={i.id} className="hover:bg-muted/40">
                                         <td className="py-2 px-2 text-center text-muted-foreground">{idx + 1}</td>
-                                        <td className="py-2 px-2 whitespace-nowrap">{formatDate(i.invoice_date)}</td>
+                                        <td className="py-2 px-2 whitespace-nowrap tabular-nums">{formatDate(i.invoice_date)}</td>
                                         <td className="py-2 px-2 whitespace-nowrap">
                                           {i.paid_at ? (
                                             <span className="inline-flex items-center gap-1 font-semibold text-success">
@@ -691,7 +708,7 @@ export default function ManagerPayments() {
                                         </td>
                                         <td className="py-2 px-2 font-medium text-foreground/80">{i.item_name}</td>
                                         <td className="py-2 px-2 text-center text-muted-foreground">{i.qty}</td>
-                                        <td className="py-2 px-2 text-right font-semibold">{formatRupiah(i.total)}</td>
+                                        <td className="py-2 px-2 text-right font-semibold tabular-nums">{formatRupiah(i.total)}</td>
                                         <td className="py-2 px-2 text-center">
                                           <StatusBadge status={i.status} labels={{ done: "Lunas", pending: "Pending" }} />
                                         </td>
@@ -731,7 +748,7 @@ export default function ManagerPayments() {
                       Dibayar <b className="text-success">{formatRupiah(summaryTotals.paid)}</b>
                     </span>
                     <span className="text-muted-foreground">
-                      Belum <b className="text-warning-foreground">{formatRupiah(summaryTotals.unpaid)}</b>
+                      Belum <b className="text-warning tabular-nums">{formatRupiah(summaryTotals.unpaid)}</b>
                     </span>
                     <span className="text-muted-foreground">
                       Total <b className="text-foreground">{formatRupiah(summaryTotals.paid + summaryTotals.unpaid)}</b>

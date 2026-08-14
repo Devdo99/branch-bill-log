@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import BrandLogo from "@/components/BrandLogo";
 import { toast } from "sonner";
 import { Building2, LogOut, Plus, Lock } from "lucide-react";
+import { LoadingBlock } from "@/components/LoadingBlock";
 
 interface BranchRow { id: string; name: string }
 
@@ -85,7 +86,9 @@ export default function SelectBranch() {
         <h1 className="text-2xl font-semibold tracking-tight">Pilih Cabang</h1>
         <p className="text-muted-foreground">{role === "admin" ? "Pilih cabang yang ingin Anda kelola." : "Masukkan PIN untuk membuka dashboard cabang."}</p>
 
-        {loading ? <p className="mt-6 text-muted-foreground">Memuat...</p> : (
+        {loading ? (
+          <div className="app-card mt-6"><LoadingBlock rows={3} /></div>
+        ) : (
           <div className="grid sm:grid-cols-2 gap-4 mt-6">
             {branches.map((b) => (
               <button key={b.id} onClick={() => role === "admin" ? openAdminBranch(b) : (setSelected(b), setPin(""))}

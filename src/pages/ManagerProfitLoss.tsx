@@ -49,6 +49,7 @@ export default function ManagerProfitLoss() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [revenues, setRevenues] = useState<Revenue[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
   
   // Date Filters
   const [preset, setPreset] = useState<"bulan_ini" | "bulan_lalu" | "hari_30" | "tahun_ini" | "kustom">("bulan_ini");
@@ -86,6 +87,7 @@ export default function ManagerProfitLoss() {
   const loadData = useCallback(async () => {
     if (!activeBranchId) return;
     setLoading(true);
+    setLoadError(false);
     try {
       const [invRes, revRes] = await Promise.all([
         supabase
@@ -104,6 +106,8 @@ export default function ManagerProfitLoss() {
       setInvoices((invRes.data ?? []) as Invoice[]);
       setRevenues(((revRes.data ?? []) as unknown) as Revenue[]);
     } catch (e: any) {
+      console.error(e);
+      setLoadError(true);
       toast.error(e.message || "Gagal memuat data Laba Rugi");
     } finally {
       setLoading(false);
@@ -323,12 +327,25 @@ export default function ManagerProfitLoss() {
 
       {loading ? (
         <LoadingPage label="Memuat laporan laba rugi…" />
+      ) : loadError ? (
+        <div className="app-card">
+          <EmptyState
+            icon={<RefreshCw className="h-6 w-6" />}
+            title="Gagal memuat laporan laba rugi"
+            description="Terjadi kesalahan saat mengambil data. Periksa koneksi lalu coba lagi."
+            action={
+              <Button variant="outline" onClick={loadData}>
+                <RefreshCw className="h-4 w-4 mr-1.5" /> Coba lagi
+              </Button>
+            }
+          />
+        </div>
       ) : (
         <div className="grid lg:grid-cols-3 gap-6">
           
           {/* Main Profit & Loss Statement (2/3 width on large screens) */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="app-card p-6 shadow-md border-t-4 border-t-primary">
+            <div className="app-card p-6 border-t-4 border-t-primary">
               
               {/* Report Header */}
               <div className="text-center border-b pb-4 mb-6">
@@ -369,11 +386,11 @@ export default function ManagerProfitLoss() {
                   <div className="space-y-3 text-sm pl-4 pr-2">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Nota Lunas (Beban Terbayar)</span>
-                      <span className="font-mono text-warning-foreground">{formatRupiah(totalPaidInvoices)}</span>
+                      <span className="font-mono tabular-nums text-warning">{formatRupiah(totalPaidInvoices)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Nota Pending (Kewajiban Hutang)</span>
-                      <span className="font-mono text-destructive">{formatRupiah(totalUnpaidInvoices)}</span>
+                      <span className="font-mono tabular-nums text-destructive">{formatRupiah(totalUnpaidInvoices)}</span>
                     </div>
                   </div>
                   <div className="flex justify-between items-center font-bold text-xs bg-destructive/10 text-destructive p-2.5 rounded-md mt-4 border border-destructive/20">
@@ -405,7 +422,7 @@ export default function ManagerProfitLoss() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="border rounded-lg p-3 bg-muted/20">
                   <div className="text-[10px] text-muted-foreground uppercase font-medium">Profit Margin</div>
-                  <div className={`text-base font-bold mt-1 ${netProfit >= 0 ? "text-success" : "text-destructive"}`}>
+                  <div className={`text-base font-bold mt-1 tabular-nums ${netProfit >= 0 ? "text-success" : "text-destructive"}`}>
                     {marginPct.toFixed(1)}%
                   </div>
                 </div>
@@ -451,7 +468,7 @@ export default function ManagerProfitLoss() {
                       <div key={s.name} className="space-y-1">
                         <div className="flex justify-between text-xs font-medium">
                           <span className="truncate max-w-[120px]">{s.name}</span>
-                          <span className="font-mono text-muted-foreground">{formatRupiah(s.total)} ({pct.toFixed(0)}%)</span>
+                          <span className="font-mono tabular-nums text-muted-foreground">{formatRupiah(s.total)} ({pct.toFixed(0)}%)</span>
                         </div>
                         {/* Progress Bar */}
                         <div className="w-full bg-muted h-1.5 rounded-full overflow-hidden">

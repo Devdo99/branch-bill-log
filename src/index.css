@@ -2,100 +2,120 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design system tokens. All colors use HSL. */
+/* Design system tokens. All colors use HSL.
+   Palet: Saung by Bebek Belvr (PROGRAMER.md section 1). */
 
 @layer base {
   :root {
-    --background: 212 30% 97%;
-    --foreground: 212 50% 12%;
+    --background: 48 24% 96%;            /* #F7F6F2 */
+    --foreground: 60 7% 12%;             /* #20201C */
 
-    --card: 0 0% 100%;
-    --card-foreground: 212 50% 12%;
+    --card: 0 0% 100%;                   /* #FFFFFF */
+    --card-foreground: 60 7% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 212 50% 12%;
+    --popover-foreground: 60 7% 12%;
 
-    --primary: 208 100% 35%;
+    --primary: 67 30% 17%;               /* #1F3A2E hijau tua */
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 208 100% 45%;
+    --primary-dark: 60 29% 12%;          /* #16281F */
+    --primary-glow: 67 30% 26%;
 
-    --secondary: 212 35% 93%;
-    --secondary-foreground: 210 100% 20%;
+    --secondary: 47 22% 92%;
+    --secondary-foreground: 67 30% 17%;
 
-    --muted: 210 25% 95%;
-    --muted-foreground: 211 22% 42%;
+    --muted: 48 20% 93%;
+    --muted-foreground: 55 5% 40%;       /* #6B6A60 */
 
-    --accent: 208 70% 94%;
-    --accent-foreground: 210 100% 31%;
+    --accent: 41 61% 89%;                /* #F4E9D2 accent-soft */
+    --accent-foreground: 67 30% 17%;
+    --gold: 40 56% 51%;                  /* #C99A3E highlight angka penting */
 
-    --success: 151 62% 34%;
+    --success: 65 73% 25%;               /* #3B6D11 */
     --success-foreground: 0 0% 100%;
-    --warning: 44 100% 48%;
-    --warning-foreground: 34 42% 16%;
+    --success-bg: 86 39% 91%;            /* #EAF3DE */
 
-    --destructive: 0 68% 46%;
+    --warning: 33 85% 28%;               /* #854F0B */
+    --warning-foreground: 0 0% 100%;
+    --warning-bg: 38 76% 92%;            /* #FAEEDA */
+
+    --destructive: 0 57% 41%;            /* #A32D2D */
     --destructive-foreground: 0 0% 100%;
+    --destructive-bg: 0 74% 95%;         /* #FCEBEB */
 
-    --border: 212 38% 87%;
-    --input: 212 38% 87%;
-    --ring: 208 100% 35%;
+    --border: 47 21% 87%;                /* #E4E1D6 */
+    --input: 47 21% 87%;
+    --ring: 40 60% 42%;
 
-    --radius: 0.5rem;
+    --radius: 0.625rem;                  /* 10px */
 
-    --gradient-primary: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--primary)));
-    --gradient-dark: linear-gradient(180deg, hsl(210 100% 12%), #002447);
-    --shadow-elegant: 0 8px 24px hsl(212 50% 12% / 0.06);
-    --shadow-card: 0 1px 2px hsl(212 50% 12% / 0.04), 0 8px 24px hsl(212 50% 12% / 0.03);
-    
-    --sidebar-background: 213 100% 10%;
-    --sidebar-foreground: 210 20% 92%;
-    --sidebar-primary: 208 100% 40%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 100% 16%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 210 100% 15%;
-    --sidebar-ring: 208 100% 45%;
-    --sidebar-glow: 208 100% 58%;
+    --gradient-primary: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--primary-dark)));
+    --gradient-dark: linear-gradient(180deg, hsl(60 29% 10%), hsl(60 29% 6%));
+    --shadow-elegant: 0 4px 16px hsl(60 7% 12% / 0.08);
+    --shadow-card: 0 1px 2px hsl(60 7% 12% / 0.04), 0 4px 12px hsl(60 7% 12% / 0.04);
+
+    --sidebar-background: 60 29% 12%;    /* #16281F */
+    --sidebar-foreground: 48 30% 92%;
+    --sidebar-primary: 40 56% 51%;       /* gold #C99A3E */
+    --sidebar-primary-foreground: 60 29% 12%;
+    --sidebar-accent: 67 28% 20%;
+    --sidebar-accent-foreground: 48 30% 94%;
+    --sidebar-border: 60 25% 18%;
+    --sidebar-ring: 40 56% 55%;
+    --sidebar-glow: 40 60% 50%;
   }
 
   .dark {
-    --background: 210 100% 8%;
-    --foreground: 214 35% 93%;
+    --background: 60 25% 8%;
+    --foreground: 48 25% 92%;
 
-    --card: 210 100% 11%;
-    --card-foreground: 214 35% 93%;
+    --card: 60 22% 11%;
+    --card-foreground: 48 25% 92%;
 
-    --popover: 210 100% 11%;
-    --popover-foreground: 214 35% 93%;
+    --popover: 60 22% 11%;
+    --popover-foreground: 48 25% 92%;
 
-    --primary: 209 100% 41%;
+    --primary: 67 26% 24%;
     --primary-foreground: 0 0% 100%;
+    --primary-dark: 60 29% 10%;
 
-    --secondary: 210 100% 16%;
-    --secondary-foreground: 214 35% 93%;
+    --secondary: 60 20% 16%;
+    --secondary-foreground: 48 25% 90%;
 
-    --muted: 210 100% 13%;
-    --muted-foreground: 210 28% 66%;
+    --muted: 60 20% 14%;
+    --muted-foreground: 48 15% 62%;
 
-    --accent: 210 100% 23%;
-    --accent-foreground: 214 35% 93%;
+    --accent: 40 25% 20%;
+    --accent-foreground: 40 60% 75%;
 
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 214 35% 93%;
+    --success: 65 50% 45%;
+    --success-foreground: 0 0% 100%;
+    --success-bg: 65 30% 18%;
 
-    --border: 210 100% 18%;
-    --input: 210 100% 18%;
-    --ring: 209 100% 41%;
-    
-    --sidebar-background: 213 100% 8%;
-    --sidebar-foreground: 210 20% 92%;
-    --sidebar-primary: 209 100% 42%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 100% 13%;
-    --sidebar-accent-foreground: 214 35% 93%;
-    --sidebar-border: 210 100% 11%;
-    --sidebar-ring: 209 100% 45%;
-    --sidebar-glow: 209 100% 60%;
+    --warning: 33 70% 50%;
+    --warning-foreground: 33 30% 10%;
+    --warning-bg: 33 30% 18%;
+
+    --destructive: 0 55% 45%;
+    --destructive-foreground: 0 0% 100%;
+    --destructive-bg: 0 40% 18%;
+
+    --border: 60 20% 18%;
+    --input: 60 20% 18%;
+    --ring: 40 60% 55%;
+
+    --shadow-elegant: 0 4px 16px hsl(0 0% 0% / 0.3);
+    --shadow-card: 0 1px 2px hsl(0 0% 0% / 0.2);
+
+    --sidebar-background: 60 25% 7%;
+    --sidebar-foreground: 48 25% 90%;
+    --sidebar-primary: 40 56% 55%;
+    --sidebar-primary-foreground: 60 29% 10%;
+    --sidebar-accent: 67 22% 16%;
+    --sidebar-accent-foreground: 48 25% 92%;
+    --sidebar-border: 60 22% 12%;
+    --sidebar-ring: 40 56% 55%;
+    --sidebar-glow: 40 60% 55%;
   }
 }
 
@@ -141,7 +161,7 @@
     background-color: hsl(var(--sidebar-background));
     background-image:
       radial-gradient(1100px 420px at 100% -10%, hsl(var(--sidebar-glow) / 0.14), transparent 60%),
-      linear-gradient(180deg, hsl(var(--sidebar-background)) 0%, hsl(213 100% 7%) 100%);
+      linear-gradient(180deg, hsl(var(--sidebar-background)) 0%, hsl(60 29% 9%) 100%);
   }
 
   /* Biarkan gradien sidebar terlihat: elemen dalam tidak boleh menutup latar */

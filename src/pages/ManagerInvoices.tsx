@@ -130,6 +130,7 @@ export default function ManagerInvoices() {
   const activeBranchId = activeBranch?.id;
   const [invs, setInvs] = useState<Inv[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [supplier, setSupplier] = useState("");
   const [itemQuery, setItemQuery] = useState("");
   const [supplierFilter, setSupplierFilter] = useState<string>("all");
@@ -206,9 +207,13 @@ export default function ManagerInvoices() {
   const load = useCallback(async () => {
     if (!activeBranchId) return;
     setLoading(true);
+    setLoadError(null);
     const { data, error } = await supabase.from("invoices").select("*")
       .eq("branch_id", activeBranchId).order("invoice_date", { ascending: false });
-    if (error) toast.error(error.message);
+    if (error) {
+      setLoadError(error.message);
+      toast.error(error.message);
+    }
     setInvs((data ?? []) as Inv[]);
     setLoading(false);
   }, [activeBranchId]);
@@ -910,12 +915,13 @@ export default function ManagerInvoices() {
                   <Clock className="h-4 w-4 text-warning" /> {unpaidRows.length} nota belum dibayar
                 </span>
                 <span className="text-muted-foreground">•</span>
-                <span className="tabular-nums text-warning-foreground">{formatRupiah(unpaidRowsTotal)}</span>
+                <span className="tabular-nums text-warning">{formatRupiah(unpaidRowsTotal)}</span>
               </div>
               <div className="mt-1 text-xs text-muted-foreground">
                 {overdueRows.length > 0 ? (
-                  <span className="font-medium text-destructive">
-                    ⚠ {overdueRows.length} di antaranya lewat jatuh tempo ({formatRupiah(overdueTotal)}) — segera tandai pembayaran agar tidak menumpuk.
+                  <span className="inline-flex items-center gap-1 font-medium text-destructive">
+                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                    {overdueRows.length} di antaranya lewat jatuh tempo ({formatRupiah(overdueTotal)}) — segera tandai pembayaran agar tidak menumpuk.
                   </span>
                 ) : (
                   <span>Nota dalam rentang filter ini. Pastikan ditandai lunas setelah dibayar.</span>
@@ -1036,7 +1042,7 @@ export default function ManagerInvoices() {
               />
             </div>
             <span className="whitespace-nowrap text-xs text-muted-foreground">
-              <b className="text-success">{paidPct}%</b> lunas · sisa <b className="text-warning-foreground">{formatRupiah(unpaidTotal)}</b>
+              <b className="text-success">{paidPct}%</b> lunas · sisa <b className="text-warning">{formatRupiah(unpaidTotal)}</b>
             </span>
           </div>
         )}
@@ -1046,7 +1052,7 @@ export default function ManagerInvoices() {
       <div className="flex flex-wrap gap-2 mb-4">
         <Button variant="outline" className="h-9 rounded-lg border-border bg-card shadow-sm hover:bg-accent" onClick={exportPDF}><FileDown className="h-4 w-4 mr-1.5 text-primary" /> Export PDF</Button>
         <Button variant="outline" className="h-9 rounded-lg border-border bg-card shadow-sm hover:bg-accent" onClick={exportJPG}><ImgIcon className="h-4 w-4 mr-1.5 text-primary" /> Export JPG</Button>
-        <Button variant="outline" className="h-9 rounded-lg border-border bg-card shadow-sm hover:bg-accent" onClick={exportExcel} title="Unduh data terfilter ke Excel"><FileSpreadsheet className="h-4 w-4 mr-1.5 text-emerald-600" /> Export Excel</Button>
+        <Button variant="outline" className="h-9 rounded-lg border-border bg-card shadow-sm hover:bg-accent" onClick={exportExcel} title="Unduh data terfilter ke Excel"><FileSpreadsheet className="h-4 w-4 mr-1.5 text-success" /> Export Excel</Button>
         <Button variant="outline" className="h-9 rounded-lg border-border bg-card shadow-sm hover:bg-accent" onClick={downloadSelectedPhotos} disabled={downloading}>
           <Archive className="h-4 w-4 mr-1.5 text-primary" /> {downloading ? "Mengemas…" : `Unduh Foto ZIP${selected.size > 0 ? ` (${selected.size})` : ""}`}
         </Button>
@@ -1089,7 +1095,7 @@ export default function ManagerInvoices() {
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
-            <thead className="bg-muted/40 text-left">
+            <thead className="sticky top-0 z-10 bg-muted text-left">
               <tr className="text-[10.5px] uppercase tracking-wider text-muted-foreground">
                 <th className="px-3 py-2.5 w-8"><Checkbox checked={allFilteredSelected} onCheckedChange={toggleSelectAll} aria-label="Pilih semua" /></th>
                 <th className="px-3 py-2.5">Bayar</th><th className="px-3 py-2.5">Tanggal</th><th className="px-3 py-2.5">Supplier</th>
@@ -1104,6 +1110,22 @@ export default function ManagerInvoices() {
                     <LoadingBlock rows={6} />
                   </td>
                 </tr>
+              ) : loadError ? (
+                <tr>
+                  <td colSpan={11}>
+                    <EmptyState
+                      icon={<AlertTriangle className="h-6 w-6" />}
+                      title="Gagal memuat nota"
+                      description={loadError}
+                      action={
+                        <Button variant="outline" size="sm" onClick={load}>
+                          <RefreshCw className="h-4 w-4 mr-1.5" /> Coba lagi
+                        </Button>
+                      }
+                      compact
+                    />
+                  </td>
+                </tr>
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={11}>
@@ -1111,6 +1133,20 @@ export default function ManagerInvoices() {
                       icon={<Receipt className="h-6 w-6" />}
                       title="Tidak ada nota"
                       description="Coba ubah filter pencarian atau rentang tanggal."
+                      action={
+                        (supplier || itemQuery || supplierFilter !== "all" || status !== "all" || from || to) ? (
+                          <Button variant="outline" size="sm" onClick={() => {
+                            setSupplier("");
+                            setItemQuery("");
+                            setSupplierFilter("all");
+                            setStatus("all");
+                            setFrom("");
+                            setTo("");
+                          }}>
+                            <RotateCcw className="h-4 w-4 mr-1.5" /> Reset filter
+                          </Button>
+                        ) : undefined
+                      }
                       compact
                     />
                   </td>
@@ -1119,7 +1155,7 @@ export default function ManagerInvoices() {
                 <tr key={i.id} className={`border-t border-border/50 transition-colors hover:bg-muted/30 ${selected.has(i.id) ? "bg-primary/5" : ""}`}>
                   <td className="px-3 py-2.5"><Checkbox checked={selected.has(i.id)} onCheckedChange={() => toggleSelect(i.id)} aria-label="Pilih nota" /></td>
                   <td className="px-3 py-2.5"><Checkbox checked={i.status === "SUDAH"} onCheckedChange={(v) => togglePaid(i, !!v)} title="Tandai lunas / belum bayar" /></td>
-                  <td className="px-3 py-2.5 whitespace-nowrap font-medium">{formatDate(i.invoice_date)}</td>
+                  <td className="px-3 py-2.5 whitespace-nowrap font-medium tabular-nums">{formatDate(i.invoice_date)}</td>
                   <td className="px-3 py-2.5 font-semibold text-foreground/90">{i.supplier}</td>
                   <td className="px-3 py-2.5 text-foreground/80">{i.item_name}</td>
                   <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{i.qty}</td>
@@ -1128,14 +1164,14 @@ export default function ManagerInvoices() {
                   <td className="px-3 py-2.5">
                     <StatusBadge status={i.status} />
                   </td>
-                  <td className="px-3 py-2.5 whitespace-nowrap text-xs text-muted-foreground">
+                  <td className="px-3 py-2.5 whitespace-nowrap text-xs text-muted-foreground tabular-nums">
                     {i.paid_at ? formatDate(i.paid_at) : "—"}
                   </td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center justify-end gap-1">
-                      <Button size="icon" variant="ghost" title="Detail" className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary" onClick={() => openDetail(i)}><Eye className="h-4 w-4" /></Button>
-                      <Button size="icon" variant="ghost" title="Edit nota" className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary" onClick={() => openEdit(i)}><Pencil className="h-4 w-4" /></Button>
-                      <Button size="icon" variant="ghost" title="Hapus" className="h-8 w-8 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => setDeleting(i)}><Trash2 className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="ghost" title="Detail" className="h-9 w-9 rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary" onClick={() => openDetail(i)}><Eye className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="ghost" title="Edit nota" className="h-9 w-9 rounded-lg text-muted-foreground hover:bg-primary/10 hover:text-primary" onClick={() => openEdit(i)}><Pencil className="h-4 w-4" /></Button>
+                      <Button size="icon" variant="ghost" title="Hapus" className="h-9 w-9 rounded-lg text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => setDeleting(i)}><Trash2 className="h-4 w-4" /></Button>
                     </div>
                   </td>
                 </tr>
@@ -1154,8 +1190,8 @@ export default function ManagerInvoices() {
               <Row k="Supplier" v={detail.supplier} />
               <Row k="Barang" v={detail.item_name} />
               <Row k="Qty × Harga" v={`${detail.qty} × ${formatRupiah(Number(detail.price))}`} />
-              <Row k="Total" v={<span className="font-semibold">{formatRupiah(Number(detail.total))}</span>} />
-              <Row k="Status" v={detail.status} />
+              <Row k="Total" v={<span className="font-semibold tabular-nums">{formatRupiah(Number(detail.total))}</span>} />
+              <Row k="Status" v={<StatusBadge status={detail.status} />} />
               {detail.paid_at && <Row k="Dibayar pada" v={new Date(detail.paid_at).toLocaleString("id-ID")} />}
               {photoUrl ? (
                 <div>
@@ -1485,7 +1521,7 @@ export default function ManagerInvoices() {
       <Dialog open={bulkPayOpen} onOpenChange={setBulkPayOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-emerald-600">
+            <DialogTitle className="flex items-center gap-2 text-success">
               <CheckCircle2 className="h-5 w-5" /> Validasi Pembayaran Sekaligus
             </DialogTitle>
           </DialogHeader>
@@ -1497,7 +1533,7 @@ export default function ManagerInvoices() {
               </div>
               <div className="flex justify-between border-t pt-2">
                 <span className="text-muted-foreground font-semibold">Total Pembayaran:</span>
-                <span className="font-bold text-emerald-600 text-base">{formatRupiah(bulkPayTotal)}</span>
+                <span className="font-bold text-success text-base tabular-nums">{formatRupiah(bulkPayTotal)}</span>
               </div>
             </div>
 
@@ -1522,7 +1558,7 @@ export default function ManagerInvoices() {
               <Button 
                 onClick={confirmBulkPayment} 
                 disabled={confirmingBulkPay}
-                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                className="bg-success hover:bg-success/90 text-success-foreground"
               >
                 {confirmingBulkPay ? "Memproses…" : "Konfirmasi & Tandai Lunas"}
               </Button>
@@ -1550,7 +1586,7 @@ function StatCard({ icon, label, value, tone }: { icon: React.ReactNode; label: 
       <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg border ${toneCls}`}>{icon}</div>
       <div className="min-w-0">
         <div className="truncate text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
-        <div className="truncate text-base font-bold leading-snug text-foreground">{value}</div>
+        <div className="truncate text-base font-bold leading-snug tabular-nums text-foreground">{value}</div>
       </div>
     </div>
   );
