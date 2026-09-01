@@ -113,21 +113,36 @@ function cacheMessage(msg) {
   }
 }
 
+function isGroupJid(jid) {
+  return jid && jid.endsWith('@g.us');
+}
+
 function resolveContactName(jid) {
-  // Try contactStore first (most reliable)
+  if (!jid) return jid;
+  // For groups, try chatStore subject
+  if (isGroupJid(jid)) {
+    const chat = chatStore.get(jid);
+    if (chat) {
+      if (chat.subject) return chat.subject;
+      if (chat.name) return chat.name;
+    }
+    return jid.replace(/@g\.us$/, '') || jid;
+  }
+  // For personal contacts, try contactStore first (most reliable)
   const contact = contactStore.get(jid);
   if (contact) {
     if (contact.name) return contact.name;
     if (contact.notify) return contact.notify;
   }
-  // Try chatStore
+  // Try chatStore (pushName from chat events)
   const chat = chatStore.get(jid);
   if (chat) {
-    if (chat.name) return chat.name;
     if (chat.pushName) return chat.pushName;
+    if (chat.name) return chat.name;
   }
-  // Fallback to JID
-  return jid.replace(/@s\.whatsapp\.net$/, '').replace(/@g\.us$/, '') || jid;
+  // Fallback to phone number (strip @s.whatsapp.net)
+  const phone = jid.replace(/@s\.whatsapp\.net$/, '');
+  return phone || jid;
 }
 
 function getChatList() {
@@ -185,6 +200,24 @@ async function connectToWhatsApp() {
       if (upsert.type !== 'notify') return;
       for (const msg of upsert.messages) {
         cacheMessage(msg);
+        // Also capture pushName from incoming messages to resolve contact names
+        const senderJid = msg.key.fromMe ? (msg.key.participant || msg.key.remoteJid) : msg.key.remoteJid;
+        const pushName = msg.pushName;
+        if (pushName && senderJid && !senderJid.includes('@g.us')) {
+          // Update contactStore with pushName if not already set
+          const existing = contactStore.get(senderJid);
+          if (!existing || (!existing.name && !existing.notify)) {
+            contactStore.set(senderJid, { id: senderJid, name: pushName, notify: pushName, ...(existing || {}) });
+          }
+        }
+        // For group messages, capture participant pushName
+        if (msg.key.participant && msg.pushName && isGroupJid(msg.key.remoteJid)) {
+          const partJid = msg.key.participant;
+          const existing = contactStore.get(partJid);
+          if (!existing || (!existing.name && !existing.notify)) {
+            contactStore.set(partJid, { id: partJid, name: msg.pushName, notify: msg.pushName, ...(existing || {}) });
+          }
+        }
       }
     });
 

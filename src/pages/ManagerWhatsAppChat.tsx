@@ -420,6 +420,14 @@ export default function ManagerWhatsAppChat() {
 
   // ── Resolve name from JID for display ──
   const resolveName = (jid: string) => {
+    if (!jid) return jid;
+    // For group messages, try to find the participant name from chat context
+    if (isGroupJid(selectedChat?.jid || "")) {
+      // Try to find name from messages where this participant sent
+      const foundMsg = messages.find((m) => m.from === jid && m.body);
+      // Just strip JID suffix as fallback
+      return jid.replace(/@s\.whatsapp\.net$/, "").replace(/@g\.us$/, "") || jid;
+    }
     return jid.replace(/@s\.whatsapp\.net$/, "").replace(/@g\.us$/, "") || jid;
   };
 
