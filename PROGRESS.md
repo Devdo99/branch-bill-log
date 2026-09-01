@@ -84,7 +84,7 @@ Aplikasi ini menggunakan beberapa tabel utama di PostgreSQL (Supabase):
 ### 📈 Fase 1: Analytics & Integrasi Laporan (Short-term)
 - [ ] **Laporan Gabungan Multi-Cabang**: Halaman khusus manager untuk membandingkan performa omset dan pengeluaran antar cabang secara berdampingan.
 - [ ] **Grafik Margin & Profitabilitas**: Visualisasi perbandingan antara Omset Harian vs Total Pengeluaran Nota Supplier.
-- [ ] **Ekspor Laporan Lebih Kaya**: Template PDF laporan yang lebih rapi dilengkapi dengan logo bisnis dan format slip yang siap dicetak.
+- [x] **Ekspor Laporan Lebih Kaya**: Template PDF laporan yang lebih rapi dilengkapi dengan logo bisnis dan format slip yang siap dicetak.
 
 ### 🤖 Fase 2: Otomatisasi & Kecerdasan Buatan (Medium-term)
 - [ ] **AI OCR Reader untuk Nota**: Kasir cukup memfoto nota, lalu AI secara otomatis mengekstrak nama supplier, daftar barang, qty, harga satuan, dan total nominal (mengurangi kesalahan input manual).
@@ -104,6 +104,7 @@ Aplikasi ini menggunakan beberapa tabel utama di PostgreSQL (Supabase):
 
 | Tanggal | Versi | Perubahan / Update | Keterangan |
 | :--- | :--- | :--- | :--- |
+| 2026-09-01 | `1.6.0` | Ekspor PDF Profesional dengan Branding | Membuat modul `src/lib/pdf.ts` dengan template PDF profesional: logo NotaKu, header bersusun, section berwarna, tabel dengan zebra-striping, status badge, footer halaman. Mengupdate export PDF di halaman Laba Rugi dan Daftar Nota. |
 | 2026-08-02 | `1.5.0` | Laporan Pembayaran & Ekspor Excel | Membuat halaman laporan pembayaran dengan filter tanggal (tanggal nota/bayar) dan status pembayaran, serta ekspor file Excel (.xlsx). |
 | 2026-08-02 | `1.4.0` | Integrasi WhatsApp Gateway Hibrida | Mengembangkan backend Express + Baileys, membuat halaman pengaturan WhatsApp Gateway, dan mengintegrasikan pengiriman pesan di latar belakang dengan fallback wa.me. |
 | 2026-07-06 | `1.3.1` | Perbaikan Bug Tag Penutup HTML | Memperbaiki tag penutup HTML yang tidak lengkap pada berkas KasirDashboard.tsx akibat perubahan visual sebelumnya. |

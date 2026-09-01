@@ -19,7 +19,7 @@ import {
   ChevronRight,
   DollarSign
 } from "lucide-react";
-import jsPDF from "jspdf";
+import { generateLabaRugiPDF } from "@/lib/pdf";
 import { LoadingPage } from "@/components/LoadingBlock";
 import { EmptyState } from "@/components/EmptyState";
 
@@ -173,66 +173,16 @@ export default function ManagerProfitLoss() {
 
   // Export PDF
   const exportPDF = () => {
-    const doc = new jsPDF();
-    const branchName = activeBranch?.name || "Semua Cabang";
-    const dateStr = `${formatDate(from)} s/d ${formatDate(to)}`;
-    
-    // Header
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
-    doc.text("LAPORAN LABA RUGI", 14, 20);
-    doc.setFontSize(12);
-    doc.setFont("helvetica", "normal");
-    doc.text(`Cabang: ${branchName}`, 14, 28);
-    doc.text(`Periode: ${dateStr}`, 14, 34);
-    doc.text(`Pengekspor: ${fullName || "Manager"}`, 14, 40);
-    
-    doc.setDrawColor(200, 200, 200);
-    doc.line(14, 45, 196, 45);
-    
-    // Section 1: Pendapatan
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
-    doc.text("1. PENDAPATAN OPERASIONAL", 14, 55);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    doc.text("Omset Harian Cabang", 20, 64);
-    doc.text(formatRupiah(totalOmset), 150, 64, { align: "right" });
-    
-    // Total Pendapatan
-    doc.setFont("helvetica", "bold");
-    doc.text("Total Pendapatan Bersih (A)", 20, 72);
-    doc.text(formatRupiah(totalOmset), 150, 72, { align: "right" });
-    
-    doc.line(20, 75, 196, 75);
-    
-    // Section 2: Pengeluaran
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(13);
-    doc.text("2. BEBAN OPERASIONAL (NOTA SUPPLIER)", 14, 86);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    doc.text("Beban Nota Lunas (Terbayar)", 20, 95);
-    doc.text(formatRupiah(totalPaidInvoices), 150, 95, { align: "right" });
-    doc.text("Beban Nota Hutang (Belum Bayar)", 20, 103);
-    doc.text(formatRupiah(totalUnpaidInvoices), 150, 103, { align: "right" });
-    
-    // Total Pengeluaran
-    doc.setFont("helvetica", "bold");
-    doc.text("Total Beban Operasional (B)", 20, 112);
-    doc.text(formatRupiah(totalInvoices), 150, 112, { align: "right" });
-    
-    doc.line(20, 116, 196, 116);
-    
-    // Section 3: Laba Rugi Bersih
-    doc.setFontSize(13);
-    doc.text("3. HASIL BERSIH (A - B)", 14, 128);
-    doc.setFontSize(12);
-    doc.text("LABA / (RUGI) BERSIH", 20, 138);
-    doc.text(formatRupiah(netProfit), 150, 138, { align: "right" });
-    doc.text(`Margin Keuntungan: ${marginPct.toFixed(1)}%`, 20, 146);
-    
-    doc.save(`LabaRugi-${branchName.replace(/\s+/g, "_")}-${Date.now()}.pdf`);
+    generateLabaRugiPDF({
+      branchName: activeBranch?.name || "Semua Cabang",
+      period: `${formatDate(from)} s/d ${formatDate(to)}`,
+      exportedBy: fullName || "Manager",
+      totalOmset,
+      totalPaidInvoices,
+      totalUnpaidInvoices,
+      totalInvoices,
+      expensesBySupplier,
+    });
     toast.success("Laporan Laba Rugi PDF berhasil diunduh!");
   };
 

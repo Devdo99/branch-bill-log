@@ -22,7 +22,7 @@ import {
 import { LoadingBlock } from "@/components/LoadingBlock";
 import { EmptyState } from "@/components/EmptyState";
 import { StatusBadge } from "@/components/StatusBadge";
-import jsPDF from "jspdf";
+import { generateNotaLaporanPDF } from "@/lib/pdf";
 import JSZip from "jszip";
 import * as XLSX from "xlsx";
 import type { DateRange } from "react-day-picker";
@@ -132,7 +132,7 @@ interface Inv {
 
 export default function ManagerInvoices() {
   const { activeBranch } = useBranch();
-  const { user } = useAuth();
+  const { user, fullName } = useAuth();
   const activeBranchId = activeBranch?.id;
   const [invs, setInvs] = useState<Inv[]>([]);
   const [loading, setLoading] = useState(true);
@@ -810,24 +810,55 @@ export default function ManagerInvoices() {
   };
 
   const exportPDF = () => {
-    const doc = new jsPDF();
-    doc.setFontSize(16); doc.text(`Laporan Nota — ${activeBranch?.name}`, 14, 18);
-    doc.setFontSize(10); doc.text(`Total: ${formatRupiah(totalFiltered)}`, 14, 26);
-    let y = 36;
-    doc.setFontSize(9);
-    doc.text("Tanggal", 14, y); doc.text("Supplier", 44, y); doc.text("Barang", 84, y); doc.text("Qty", 124, y); doc.text("Total", 144, y); doc.text("Status", 178, y);
-    y += 4; doc.line(14, y, 196, y); y += 6;
-    filtered.forEach((i) => {
-      if (y > 280) { doc.addPage(); y = 20; }
-      doc.text(formatDate(i.invoice_date), 14, y);
-      doc.text(i.supplier.slice(0, 18), 44, y);
-      doc.text(i.item_name.slice(0, 18), 84, y);
-      doc.text(String(i.qty), 124, y);
-      doc.text(formatRupiah(i.total), 144, y);
-      doc.text(i.status, 178, y);
-      y += 7;
-    });
-    doc.save(`laporan-${activeBranch?.name}-${Date.now()}.pdf`);
+    if (filtered.length === 0) return toast.error("Tidak ada data untuk diekspor");
+    try {
+      // Build supplier summary from filtered data
+      const groups = new Map<string, typeof filtered>();
+      filtered.forEach((r) => {
+        const arr = groups.get(r.supplier) ?? [];
+        arr.push(r);
+        groups.set(r.supplier, arr);
+      });
+      const supplierSummary = Array.from(groups.entries()).map(([name, items]) => {
+        const subtotal = items.reduce((s, x) => s + Number(x.total), 0);
+        const paid = items.filter((x) => x.status === "SUDAH").reduce((s, x) => s + Number(x.total), 0);
+        const b = supplierBank[name];
+        return {
+          name,
+          count: items.length,
+          paid,
+          unpaid: subtotal - paid,
+          total: subtotal,
+          bankName: b?.bank_name || undefined,
+          bankAccount: b?.bank_account || undefined,
+          accountHolder: b?.account_holder || undefined,
+        };
+      }).sort((a, b) => b.total - a.total);
+
+      generateNotaLaporanPDF({
+        branchName: activeBranch?.name || "Semua Cabang",
+        period: `${from || "Semua"} s/d ${to || "Semua"}`,
+        exportedBy: fullName || "Manager",
+        items: filtered.map((i) => ({
+          invoice_date: i.invoice_date,
+          supplier: i.supplier,
+          item_name: i.item_name,
+          qty: i.qty,
+          price: i.price,
+          total: i.total,
+          status: i.status,
+          paid_at: i.paid_at,
+        })),
+        totalFiltered,
+        paidTotal,
+        unpaidTotal,
+        supplierSummary,
+      });
+      toast.success("Laporan Nota PDF berhasil diunduh!");
+    } catch (e: any) {
+      console.error(e);
+      toast.error("Gagal membuat PDF: " + (e.message || e));
+    }
   };
 
   const exportJPG = async () => {
