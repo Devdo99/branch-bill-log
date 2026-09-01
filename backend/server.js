@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
+const { google } = require('googleapis');
 
 const app = express();
 app.use(cors());
@@ -842,6 +843,238 @@ app.post('/api/delete-message', async (req, res) => {
   } catch (err) {
     console.error('Error deleting message:', err);
     res.status(500).json({ error: err.message || 'Failed to delete message' });
+  }
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// Google Sheets Direct API (tanpa Apps Script)
+// ══════════════════════════════════════════════════════════════════════════
+const GSHEETS_CONFIG_PATH = path.join(__dirname, 'gsheets_config.json');
+let gsheetsJwtClient = null;
+let gsheetsConf = { spreadsheetId: '', sheetName: 'Daftar Nota', serviceAccountEmail: '' };
+
+// Load saved Google Sheets config from disk
+try {
+  if (fs.existsSync(GSHEETS_CONFIG_PATH)) {
+    const raw = JSON.parse(fs.readFileSync(GSHEETS_CONFIG_PATH, 'utf8'));
+    gsheetsConf = { ...gsheetsConf, ...raw };
+  }
+} catch (e) {
+  console.warn('Failed to load gsheets config:', e.message);
+}
+
+// ── POST /api/gsheets/config — Save service account + spreadsheet ID ──
+app.post('/api/gsheets/config', (req, res) => {
+  try {
+    const { spreadsheetId, sheetName, serviceAccountJson } = req.body;
+    if (!spreadsheetId || !serviceAccountJson) {
+      return res.status(400).json({ error: 'spreadsheetId and serviceAccountJson are required' });
+    }
+    // Validate service account JSON
+    let sa;
+    try {
+      sa = typeof serviceAccountJson === 'string' ? JSON.parse(serviceAccountJson) : serviceAccountJson;
+    } catch {
+      return res.status(400).json({ error: 'Invalid service account JSON' });
+    }
+    if (!sa.client_email || !sa.private_key) {
+      return res.status(400).json({ error: 'Service account must have client_email and private_key' });
+    }
+    // Save config to disk
+    const config = {
+      spreadsheetId,
+      sheetName: sheetName || 'Daftar Nota',
+      serviceAccountEmail: sa.client_email,
+      serviceAccountJson: sa, // stored for API auth
+    };
+    fs.writeFileSync(GSHEETS_CONFIG_PATH, JSON.stringify(config, null, 2));
+    gsheetsConf = config;
+    gsheetsJwtClient = null; // reset so next request creates fresh auth
+    res.json({ success: true, message: 'Config saved', spreadsheetId, sheetName: config.sheetName });
+  } catch (err) {
+    console.error('Error saving gsheets config:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/gsheets/config — Get current config (without secret key) ──
+app.get('/api/gsheets/config', (req, res) => {
+  res.json({
+    spreadsheetId: gsheetsConf.spreadsheetId || '',
+    sheetName: gsheetsConf.sheetName || 'Daftar Nota',
+    serviceAccountEmail: gsheetsConf.serviceAccountEmail || '',
+    configured: !!(gsheetsConf.spreadsheetId && gsheetsConf.serviceAccountEmail),
+  });
+});
+
+// ── POST /api/gsheets/test — Test connection ──
+app.post('/api/gsheets/test', async (req, res) => {
+  try {
+    const { spreadsheetId, serviceAccountJson } = req.body;
+    const sid = spreadsheetId || gsheetsConf.spreadsheetId;
+    let sa;
+    try {
+      const saRaw = serviceAccountJson || (gsheetsConf.serviceAccountJson ? JSON.stringify(gsheetsConf.serviceAccountJson) : null);
+      if (!saRaw) return res.status(400).json({ error: 'Service account not configured' });
+      sa = typeof saRaw === 'string' ? JSON.parse(saRaw) : saRaw;
+    } catch {
+      return res.status(400).json({ error: 'Invalid service account' });
+    }
+    if (!sid) return res.status(400).json({ error: 'Spreadsheet ID not configured' });
+
+    // Auth
+    const jwtClient = new google.auth.JWT(sa.client_email, null, sa.private_key, ['https://www.googleapis.com/auth/spreadsheets']);
+    await jwtClient.authorize();
+
+    // Try to read the spreadsheet metadata
+    const sheets = google.sheets({ version: 'v4', auth: jwtClient });
+    const meta = await sheets.spreadsheets.get({ spreadsheetId: sid });
+    const title = meta.data.properties?.title || 'Unknown';
+    const sheetNames = (meta.data.sheets || []).map(s => s.properties?.title).join(', ');
+    res.json({ success: true, message: `Terhubung ke "${title}" (${sheetNames})` });
+  } catch (err) {
+    console.error('GSheets test error:', err);
+    res.status(500).json({ success: false, error: err.message || 'Connection failed' });
+  }
+});
+
+// ── POST /api/gsheets/sync — Push invoice rows to Google Sheets ──
+app.post('/api/gsheets/sync', async (req, res) => {
+  try {
+    const { rows } = req.body; // Array of invoice objects
+    if (!Array.isArray(rows) || rows.length === 0) {
+      return res.status(400).json({ error: 'rows array is required' });
+    }
+    if (!gsheetsConf.spreadsheetId || !gsheetsConf.serviceAccountJson) {
+      return res.status(400).json({ error: 'Google Sheets not configured. Save config first.' });
+    }
+
+    // Auth
+    const sa = gsheetsConf.serviceAccountJson;
+    const jwtClient = new google.auth.JWT(sa.client_email, null, sa.private_key, ['https://www.googleapis.com/auth/spreadsheets']);
+    await jwtClient.authorize();
+
+    const sheetsApi = google.sheets({ version: 'v4', auth: jwtClient });
+    const spreadsheetId = gsheetsConf.spreadsheetId;
+    const sheetName = gsheetsConf.sheetName || 'Daftar Nota';
+
+    // ── Ensure sheet exists with headers ──
+    try {
+      const meta = await sheetsApi.spreadsheets.get({ spreadsheetId, fields: 'sheets.properties' });
+      const existingSheets = (meta.data.sheets || []).map(s => s.properties?.title);
+      if (!existingSheets.includes(sheetName)) {
+        // Create sheet with headers
+        await sheetsApi.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            requests: [{
+              addSheet: {
+                properties: {
+                  title: sheetName,
+                  gridProperties: { frozenRowCount: 1 },
+                },
+              },
+            }],
+          },
+        });
+        // Write headers
+        const headers = [["ID Nota","Cabang","Tanggal Nota","Supplier","Nama Barang","Qty","Harga Satuan","Total","Status","Dibuat Oleh","Waktu Input"]];
+        await sheetsApi.spreadsheets.values.update({
+          spreadsheetId,
+          range: `${sheetName}!A1`,
+          valueInputOption: 'USER_ENTERED',
+          requestBody: { values: headers },
+        });
+        // Style header row
+        await sheetsApi.spreadsheets.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            requests: [{
+              repeatCell: {
+                range: { sheetId: (meta.data.sheets?.length || 0), startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: 11 },
+                cell: {
+                  userEnteredFormat: {
+                    backgroundColor: { red: 0.102, green: 0.337, blue: 0.859 },
+                    textFormat: { bold: true, foregroundColor: { red: 1, green: 1, blue: 1 } },
+                  },
+                },
+                fields: 'userEnteredFormat(backgroundColor,textFormat)',
+              },
+            }],
+          },
+        });
+      }
+    } catch (sheetErr) {
+      console.warn('Sheet check/create warning:', sheetErr.message);
+    }
+
+    // ── Find first empty row ──
+    const readRes = await sheetsApi.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${sheetName}!A:A`,
+    });
+    const existingRows = readRes.data.values || [];
+    const startRow = existingRows.length + 1; // next empty row (1-indexed)
+
+    // ── Dedup: get existing IDs ──
+    const existingIds = new Set(existingRows.map(r => r[0]).filter(Boolean));
+    const newRows = rows.filter(r => r.id && !existingIds.has(r.id));
+    if (newRows.length === 0) {
+      return res.json({ success: true, synced: 0, message: 'Semua data sudah ada di spreadsheet' });
+    }
+
+    // ── Append new rows ──
+    const values = newRows.map(r => [
+      r.id,
+      r.branch_name || '',
+      r.invoice_date || '',
+      r.supplier || '',
+      r.item_name || '',
+      r.qty || 0,
+      r.price || 0,
+      r.total || 0,
+      r.status || '',
+      r.created_by_name || '',
+      r.created_at || new Date().toISOString(),
+    ]);
+
+    await sheetsApi.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${sheetName}!A${startRow}`,
+      valueInputOption: 'USER_ENTERED',
+      requestBody: { values },
+    });
+
+    console.log(`GSheets sync: ${newRows.length} rows appended to "${sheetName}"`);
+    res.json({ success: true, synced: newRows.length, message: `${newRows.length} data berhasil disync` });
+  } catch (err) {
+    console.error('GSheets sync error:', err);
+    res.status(500).json({ error: err.message || 'Sync failed' });
+  }
+});
+
+// ── POST /api/gsheets/sync-now — Trigger full data sync from Supabase ──
+app.post('/api/gsheets/sync-now', async (req, res) => {
+  try {
+    if (!gsheetsConf.spreadsheetId || !gsheetsConf.serviceAccountJson) {
+      return res.status(400).json({ error: 'Google Sheets not configured' });
+    }
+    // This endpoint is called by frontend with data from Supabase
+    const { rows, supabaseUrl, supabaseKey } = req.body;
+    if (!Array.isArray(rows)) {
+      return res.status(400).json({ error: 'rows array required' });
+    }
+    // Forward to /api/gsheets/sync
+    const syncRes = await fetch(`http://localhost:${PORT}/api/gsheets/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rows }),
+    });
+    const result = await syncRes.json();
+    res.json(result);
+  } catch (err) {
+    console.error('GSheets sync-now error:', err);
+    res.status(500).json({ error: err.message });
   }
 });
 

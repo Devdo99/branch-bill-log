@@ -1,19 +1,17 @@
 /**
- * Google Sheets Integration via Google Apps Script Webhook
- *
- * Cara pakai:
- * 1. Buat Google Sheet baru
- * 2. Buka Extensions > Apps Script
- * 3. Tempel kode.gs dari scripts/gs-sync.gs
- * 4. Deploy > New deployment > Web app (akses: Anyone)
- * 5. Copy URL web app dan paste di Pengaturan Google Sheets NotaKu
+ * Google Sheets Integration — Direct API via backend
+ * No Apps Script needed. Uses service account via /api/gsheets/* endpoints.
  */
 
 const STORAGE_KEY = "notaku.gsheets_config";
+const GATEWAY_URL = "http://localhost:5000";
 
 export interface GSheetsConfig {
   enabled: boolean;
-  webhookUrl: string;
+  spreadsheetId: string;
+  sheetName: string;
+  serviceAccountJson: string; // raw JSON string from user
+  serviceAccountEmail: string;
   lastSyncAt: string | null;
   lastSyncStatus: "success" | "error" | null;
   lastSyncMessage: string | null;
@@ -22,7 +20,10 @@ export interface GSheetsConfig {
 
 export const defaultConfig: GSheetsConfig = {
   enabled: false,
-  webhookUrl: "",
+  spreadsheetId: "",
+  sheetName: "Daftar Nota",
+  serviceAccountJson: "",
+  serviceAccountEmail: "",
   lastSyncAt: null,
   lastSyncStatus: null,
   lastSyncMessage: null,
@@ -58,43 +59,107 @@ export interface InvoiceRow {
 }
 
 /**
- * Sync a batch of invoice rows to Google Sheets via Apps Script webhook
+ * Save Google Sheets config to backend (service account + spreadsheet ID)
+ */
+export async function saveConfigToBackend(
+  spreadsheetId: string,
+  sheetName: string,
+  serviceAccountJson: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await fetch(`${GATEWAY_URL}/api/gsheets/config`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ spreadsheetId, sheetName, serviceAccountJson }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Gagal menyimpan config");
+    return { success: true, message: data.message || "Config tersimpan" };
+  } catch (err) {
+    return {
+      success: false,
+      message: err instanceof Error ? err.message : "Gagal menyimpan config",
+    };
+  }
+}
+
+/**
+ * Get config status from backend
+ */
+export async function getConfigFromBackend(): Promise<{
+  configured: boolean;
+  spreadsheetId: string;
+  sheetName: string;
+  serviceAccountEmail: string;
+}> {
+  try {
+    const res = await fetch(`${GATEWAY_URL}/api/gsheets/config`);
+    return await res.json();
+  } catch {
+    return { configured: false, spreadsheetId: "", sheetName: "", serviceAccountEmail: "" };
+  }
+}
+
+/**
+ * Test Google Sheets connection via backend
+ */
+export async function testGSheetsConnection(
+  spreadsheetId?: string,
+  serviceAccountJson?: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const body: Record<string, string> = {};
+    if (spreadsheetId) body.spreadsheetId = spreadsheetId;
+    if (serviceAccountJson) body.serviceAccountJson = serviceAccountJson;
+
+    const res = await fetch(`${GATEWAY_URL}/api/gsheets/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok || !data.success) {
+      return { success: false, message: data.error || data.message || "Test gagal" };
+    }
+    return { success: true, message: data.message || "Koneksi berhasil" };
+  } catch (err) {
+    return {
+      success: false,
+      message: `Koneksi gagal: ${err instanceof Error ? err.message : "Unknown error"}`,
+    };
+  }
+}
+
+/**
+ * Sync invoice rows to Google Sheets via backend (direct API)
  */
 export async function syncToGSheets(rows: InvoiceRow[]): Promise<{ success: boolean; message: string }> {
   const config = loadGSheetsConfig();
 
-  if (!config.enabled || !config.webhookUrl) {
+  if (!config.enabled || !config.spreadsheetId) {
     return { success: false, message: "Google Sheets belum dikonfigurasi" };
   }
 
   try {
-    const response = await fetch(config.webhookUrl, {
+    const res = await fetch(`${GATEWAY_URL}/api/gsheets/sync`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "sync_invoices",
-        data: rows,
-        timestamp: new Date().toISOString(),
-      }),
+      body: JSON.stringify({ rows }),
     });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Sync gagal");
 
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const result = await response.json().catch(() => ({ success: true }));
-
-    // Update config with sync status
+    // Update local config with sync status
     const updatedConfig: GSheetsConfig = {
       ...config,
       lastSyncAt: new Date().toISOString(),
       lastSyncStatus: "success",
-      lastSyncMessage: `Berhasil sync ${rows.length} data`,
-      totalSynced: config.totalSynced + rows.length,
+      lastSyncMessage: data.message || `Berhasil sync ${rows.length} data`,
+      totalSynced: config.totalSynced + (data.synced || rows.length),
     };
     saveGSheetsConfig(updatedConfig);
 
-    return { success: true, message: `Berhasil sync ${rows.length} data ke Google Sheets` };
+    return { success: true, message: data.message || `Berhasil sync ${rows.length} data ke Google Sheets` };
   } catch (err) {
     const updatedConfig: GSheetsConfig = {
       ...config,
@@ -107,34 +172,6 @@ export async function syncToGSheets(rows: InvoiceRow[]): Promise<{ success: bool
     return {
       success: false,
       message: `Gagal sync: ${err instanceof Error ? err.message : "Unknown error"}`,
-    };
-  }
-}
-
-/**
- * Test the webhook connection
- */
-export async function testGSheetsConnection(webhookUrl: string): Promise<{ success: boolean; message: string }> {
-  try {
-    const response = await fetch(webhookUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        action: "test_connection",
-        timestamp: new Date().toISOString(),
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const result = await response.json().catch(() => ({}));
-    return { success: true, message: "Koneksi berhasil! Google Sheets siap menerima data." };
-  } catch (err) {
-    return {
-      success: false,
-      message: `Koneksi gagal: ${err instanceof Error ? err.message : "Unknown error"}`,
     };
   }
 }
