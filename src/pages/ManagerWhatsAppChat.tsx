@@ -23,6 +23,7 @@ import {
   Loader2,
   X,
   ChevronDown,
+  Power,
 } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { formatDateTime } from "@/lib/format";
@@ -86,6 +87,16 @@ function getInitials(name: string) {
     .toUpperCase();
 }
 
+/** Build URL for media proxy */
+function mediaUrl(jid: string, msgId: string) {
+  return `${GATEWAY_URL}/api/media/${encodeURIComponent(jid)}/${msgId}`;
+}
+
+/** Check if JID is a group */
+function isGroupJid(jid: string) {
+  return jid.endsWith("@g.us");
+}
+
 // ── Component ──────────────────────────────────────────────────────
 export default function ManagerWhatsAppChat() {
   const [status, setStatus] = useState<ConnectionState>("offline");
@@ -98,10 +109,12 @@ export default function ManagerWhatsAppChat() {
   const [sending, setSending] = useState(false);
   const [replyText, setReplyText] = useState("");
   const [showMobileChat, setShowMobileChat] = useState(false);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
+  const [imageLoading, setImageLoading] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const replyInputRef = useRef<HTMLInputElement>(null);
+  const lastMsgTimestampRef = useRef<number>(0);
 
   // ── Check gateway status ──
   const checkStatus = useCallback(async () => {
@@ -126,12 +139,28 @@ export default function ManagerWhatsAppChat() {
       if (!res.ok) throw new Error("Gagal memuat chat");
       const data = await res.json();
       setChats(data.chats || []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Load chats error:", err);
     } finally {
       setLoadingChats(false);
     }
   }, [status]);
+
+  // ── Fetch full history from WhatsApp server ──
+  const fetchHistory = async () => {
+    setLoadingChats(true);
+    try {
+      const res = await fetch(`${GATEWAY_URL}/api/fetch-history`, { method: "POST" });
+      if (!res.ok) throw new Error("Gagal fetch history");
+      const data = await res.json();
+      setChats(data.chats || []);
+      toast.success(`History dimuat: ${data.chatCount} chat, ${data.contactCount} kontak`);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Gagal fetch history");
+    } finally {
+      setLoadingChats(false);
+    }
+  };
 
   // ── Refresh chats from server ──
   const refreshChats = async () => {
@@ -142,10 +171,26 @@ export default function ManagerWhatsAppChat() {
       const data = await res.json();
       setChats(data.chats || []);
       toast.success(`Berhasil memuat ${data.loaded || 0} chat dari server`);
-    } catch (err: any) {
-      toast.error(err.message || "Gagal refresh chat");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Gagal refresh chat");
     } finally {
       setLoadingChats(false);
+    }
+  };
+
+  // ── Force reconnect (triggers fresh history sync) ──
+  const handleReconnect = async () => {
+    if (!confirm("Reconnect akan memutus koneksi dan meminta scan QR ulang. Lanjutkan?")) return;
+    try {
+      const res = await fetch(`${GATEWAY_URL}/api/reconnect`, { method: "POST" });
+      if (!res.ok) throw new Error("Gagal reconnect");
+      toast.info("Sedang reconnect... Scan QR code baru akan muncul");
+      setStatus("disconnected");
+      setChats([]);
+      setSelectedChat(null);
+      setMessages([]);
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Gagal reconnect");
     }
   };
 
@@ -153,11 +198,15 @@ export default function ManagerWhatsAppChat() {
   const loadMessages = useCallback(async (jid: string) => {
     setLoadingMessages(true);
     try {
-      const res = await fetch(`${GATEWAY_URL}/api/messages/${encodeURIComponent(jid)}?limit=100`);
+      const res = await fetch(`${GATEWAY_URL}/api/messages/${encodeURIComponent(jid)}?limit=200`);
       if (!res.ok) throw new Error("Gagal memuat pesan");
       const data = await res.json();
-      setMessages(data.messages || []);
-    } catch (err: any) {
+      const msgs = data.messages || [];
+      setMessages(msgs);
+      if (msgs.length > 0) {
+        lastMsgTimestampRef.current = msgs[msgs.length - 1].timestamp;
+      }
+    } catch (err: unknown) {
       console.error("Load messages error:", err);
       toast.error("Gagal memuat pesan");
     } finally {
@@ -165,7 +214,7 @@ export default function ManagerWhatsAppChat() {
     }
   }, []);
 
-  // ── Polling ──
+  // ── Polling: status + chats ──
   useEffect(() => {
     checkStatus();
     const interval = setInterval(checkStatus, 5000);
@@ -179,6 +228,36 @@ export default function ManagerWhatsAppChat() {
       return () => clearInterval(interval);
     }
   }, [status, loadChats]);
+
+  // ── Polling: new messages in selected chat ──
+  useEffect(() => {
+    if (!selectedChat) return;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(
+          `${GATEWAY_URL}/api/messages/${encodeURIComponent(selectedChat.jid)}?limit=200`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        const msgs = data.messages || [];
+        // Only update if there are new messages
+        if (msgs.length > 0 && msgs[msgs.length - 1].timestamp > lastMsgTimestampRef.current) {
+          // Merge: keep local pending messages, replace with server data
+          setMessages((prev) => {
+            const pending = prev.filter((m) => m.id.startsWith("local-"));
+            const serverIds = new Set(msgs.map((m: ChatMessage) => m.id));
+            // Keep pending msgs not yet confirmed by server
+            const stillPending = pending.filter((m) => !serverIds.has(m.id));
+            return [...msgs, ...stillPending];
+          });
+          lastMsgTimestampRef.current = msgs[msgs.length - 1].timestamp;
+        }
+      } catch {
+        // Silently ignore polling errors
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [selectedChat]);
 
   // ── Auto-scroll ──
   useEffect(() => {
@@ -224,13 +303,31 @@ export default function ManagerWhatsAppChat() {
         chatJid: selectedChat.jid,
       };
       setMessages((prev) => [...prev, newMsg]);
+      lastMsgTimestampRef.current = newMsg.timestamp;
       setReplyText("");
-      toast.success("Pesan terkirim!");
-    } catch (err: any) {
-      toast.error(err.message || "Gagal mengirim pesan");
+
+      // Update chat list: move this chat to top with the new last message
+      setChats((prev) => {
+        const updated = prev.map((c) =>
+          c.jid === selectedChat.jid
+            ? { ...c, lastMessage: newMsg, messageCount: c.messageCount + 1 }
+            : c
+        );
+        // Sort by last message timestamp descending
+        updated.sort((a, b) => (b.lastMessage?.timestamp || 0) - (a.lastMessage?.timestamp || 0));
+        return updated;
+      });
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Gagal mengirim pesan");
     } finally {
       setSending(false);
     }
+  };
+
+  // ── Open image preview ──
+  const handleImagePreview = (jid: string, msgId: string) => {
+    setImageLoading(true);
+    setImagePreviewUrl(mediaUrl(jid, msgId));
   };
 
   // ── Filtered chats ──
@@ -247,15 +344,20 @@ export default function ManagerWhatsAppChat() {
   // ── Render message bubble ──
   const renderMessage = (msg: ChatMessage, prevMsg: ChatMessage | null) => {
     const isMe = msg.isFromMe;
-    const showTime = !prevMsg || prevMsg.isFromMe !== msg.isFromMe ||
+    const showTime =
+      !prevMsg ||
+      prevMsg.isFromMe !== msg.isFromMe ||
       msg.timestamp - prevMsg.timestamp > 300000; // 5 min gap
+    const isPending = msg.id.startsWith("local-");
 
     return (
       <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"} mb-1`}>
         <div className={`max-w-[75%] ${isMe ? "ml-12" : "mr-12"}`}>
           {/* Date separator */}
           {showTime && (
-            <div className={`text-[10px] text-muted-foreground my-2 ${isMe ? "text-right" : "text-left"}`}>
+            <div
+              className={`text-[10px] text-muted-foreground my-2 ${isMe ? "text-right" : "text-left"}`}
+            >
               {formatMessageTime(msg.timestamp)}
             </div>
           )}
@@ -266,33 +368,91 @@ export default function ManagerWhatsAppChat() {
               isMe
                 ? "bg-success/10 text-foreground rounded-tr-sm"
                 : "bg-card border border-border text-foreground rounded-tl-sm"
-            }`}
+            } ${isPending ? "opacity-70" : ""}`}
           >
-            {/* Media */}
+            {/* Group sender name */}
+            {!isMe && isGroupJid(msg.chatJid) && msg.from && (
+              <p className="text-[10px] font-semibold text-primary mb-0.5">
+                {msg.from.replace(/@s\.whatsapp\.net$/, "").replace(/@g\.us$/, "")}
+              </p>
+            )}
+
+            {/* Image */}
             {msg.type === "image" && (
-              <div className="mb-2 cursor-pointer" onClick={() => setImagePreview(msg.chatJid + msg.id)}>
+              <div className="mb-2 cursor-pointer" onClick={() => handleImagePreview(msg.chatJid, msg.id)}>
                 <div className="relative w-full max-w-[280px] rounded-md overflow-hidden bg-muted">
-                  <div className="flex items-center justify-center h-32 text-muted-foreground text-xs">
-                    <ImgIcon className="h-8 w-8 mr-2" /> Gambar
-                  </div>
+                  <img
+                    src={mediaUrl(msg.chatJid, msg.id)}
+                    alt="Gambar"
+                    className="w-full h-auto max-h-[300px] object-cover rounded-md"
+                    loading="lazy"
+                    onError={(e) => {
+                      // Fallback: show icon placeholder on error
+                      const target = e.currentTarget;
+                      target.style.display = "none";
+                      const parent = target.parentElement;
+                      if (parent) {
+                        const fallback = document.createElement("div");
+                        fallback.className = "flex items-center justify-center h-32 text-muted-foreground text-xs";
+                        fallback.innerHTML = '<svg class="h-8 w-8 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="m21 15-5-5L5 21"/></svg> Gambar';
+                        parent.appendChild(fallback);
+                      }
+                    }}
+                  />
                 </div>
                 {msg.caption && <p className="mt-1 text-xs">{msg.caption}</p>}
               </div>
             )}
 
+            {/* Document */}
             {msg.type === "document" && (
-              <div className="flex items-center gap-2 mb-1 p-2 rounded bg-muted/50">
+              <div
+                className="flex items-center gap-2 mb-1 p-2 rounded bg-muted/50 cursor-pointer hover:bg-muted/80 transition-colors"
+                onClick={() => {
+                  window.open(mediaUrl(msg.chatJid, msg.id), "_blank");
+                }}
+              >
                 <FileText className="h-5 w-5 text-primary shrink-0" />
                 <span className="text-xs truncate">{msg.body || "Document"}</span>
               </div>
             )}
 
-            {msg.type === "sticker" && (
+            {/* Audio */}
+            {msg.type === "audio" && (
               <div className="mb-1">
-                <span className="text-2xl">🎨</span>
+                <audio controls preload="none" className="h-8 max-w-[250px]">
+                  <source src={mediaUrl(msg.chatJid, msg.id)} />
+                </audio>
               </div>
             )}
 
+            {/* Video */}
+            {msg.type === "video" && (
+              <div className="mb-2">
+                <video
+                  controls
+                  preload="none"
+                  className="w-full max-w-[280px] rounded-md"
+                >
+                  <source src={mediaUrl(msg.chatJid, msg.id)} />
+                </video>
+                {msg.caption && <p className="mt-1 text-xs">{msg.caption}</p>}
+              </div>
+            )}
+
+            {/* Sticker */}
+            {msg.type === "sticker" && (
+              <div className="mb-1">
+                <img
+                  src={mediaUrl(msg.chatJid, msg.id)}
+                  alt="Sticker"
+                  className="h-24 w-24 object-contain"
+                  loading="lazy"
+                />
+              </div>
+            )}
+
+            {/* Location */}
             {msg.type === "location" && (
               <div className="flex items-center gap-2 mb-1">
                 <span className="text-lg">📍</span>
@@ -300,15 +460,23 @@ export default function ManagerWhatsAppChat() {
               </div>
             )}
 
+            {/* Contact */}
+            {msg.type === "contact" && (
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-lg">👤</span>
+                <span className="text-xs">{msg.body}</span>
+              </div>
+            )}
+
             {/* Text body */}
-            {msg.body && msg.type !== "image" && msg.type !== "document" && (
+            {msg.body && msg.type !== "image" && msg.type !== "document" && msg.type !== "video" && msg.type !== "audio" && msg.type !== "sticker" && (
               <p className="whitespace-pre-wrap break-words leading-relaxed">{msg.body}</p>
             )}
 
             {/* Read receipt */}
             {isMe && (
-              <span className="absolute -bottom-1 right-1 text-[9px] text-success">
-                ✓✓
+              <span className={`absolute -bottom-1 right-1 text-[9px] ${isPending ? "text-muted-foreground" : "text-success"}`}>
+                {isPending ? "🕐" : "✓✓"}
               </span>
             )}
           </div>
@@ -330,7 +498,7 @@ export default function ManagerWhatsAppChat() {
                 Server WhatsApp Gateway tidak aktif. Jalankan server backend terlebih dahulu
                 dari halaman <strong>WhatsApp Gateway</strong> di menu Pengaturan.
               </p>
-              <Button variant="outline" onClick={() => window.location.href = "/manager/whatsapp"}>
+              <Button variant="outline" onClick={() => (window.location.href = "/manager/whatsapp")}>
                 <RefreshCw className="h-4 w-4 mr-2" /> Buka Pengaturan Gateway
               </Button>
             </>
@@ -352,7 +520,11 @@ export default function ManagerWhatsAppChat() {
     <AppShell title="WhatsApp Chat">
       <div className="flex h-[calc(100vh-12rem)] rounded-lg border overflow-hidden bg-card">
         {/* ── Left Panel: Chat List ── */}
-        <div className={`w-full md:w-[340px] border-r flex flex-col ${showMobileChat ? "hidden md:flex" : "flex"}`}>
+        <div
+          className={`w-full md:w-[340px] border-r flex flex-col ${
+            showMobileChat ? "hidden md:flex" : "flex"
+          }`}
+        >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b bg-card">
             <div className="flex items-center gap-2">
@@ -372,6 +544,25 @@ export default function ManagerWhatsAppChat() {
                 title="Muat ulang chat"
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${loadingChats ? "animate-spin" : ""}`} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 p-0 text-[10px] gap-1"
+                onClick={fetchHistory}
+                title="Muat semua chat dari WhatsApp"
+              >
+                <MessageSquare className="h-3 w-3" />
+                <span className="hidden lg:inline">Load All</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 text-destructive hover:text-destructive"
+                onClick={handleReconnect}
+                title="Reconnect (scan QR ulang)"
+              >
+                <Power className="h-3.5 w-3.5" />
               </Button>
             </div>
           </div>
@@ -416,12 +607,14 @@ export default function ManagerWhatsAppChat() {
                   key={chat.jid}
                   onClick={() => handleSelectChat(chat)}
                   className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/50 border-b border-border/50 ${
-                    selectedChat?.jid === chat.jid ? "bg-primary/5 border-l-2 border-l-primary" : ""
+                    selectedChat?.jid === chat.jid
+                      ? "bg-primary/5 border-l-2 border-l-primary"
+                      : ""
                   }`}
                 >
                   {/* Avatar */}
                   <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                    {getInitials(chat.name)}
+                    {isGroupJid(chat.jid) ? "👥" : getInitials(chat.name)}
                   </div>
 
                   {/* Info */}
@@ -434,13 +627,17 @@ export default function ManagerWhatsAppChat() {
                     </div>
                     <div className="flex items-center justify-between gap-2 mt-0.5">
                       <p className="text-xs text-muted-foreground truncate">
-                        {chat.lastMessage?.isFromMe && (
-                          <span className="text-success">✓ </span>
-                        )}
+                        {chat.lastMessage?.isFromMe && <span className="text-success">✓ </span>}
                         {chat.lastMessage?.type === "image"
                           ? "📷 Gambar"
                           : chat.lastMessage?.type === "document"
                           ? "📎 Dokumen"
+                          : chat.lastMessage?.type === "audio"
+                          ? "🎤 Audio"
+                          : chat.lastMessage?.type === "video"
+                          ? "🎬 Video"
+                          : chat.lastMessage?.type === "sticker"
+                          ? "🎨 Stiker"
                           : chat.lastMessage?.body || "Pesan"}
                       </p>
                       {chat.unreadCount > 0 && (
@@ -471,12 +668,12 @@ export default function ManagerWhatsAppChat() {
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
-                  {getInitials(selectedChat.name)}
+                  {isGroupJid(selectedChat.jid) ? "👥" : getInitials(selectedChat.name)}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-sm font-semibold truncate">{selectedChat.name}</div>
                   <div className="text-[10px] text-muted-foreground">
-                    {selectedChat.messageCount} pesan
+                    {isGroupJid(selectedChat.jid) ? "Grup" : "WhatsApp"} • {selectedChat.messageCount} pesan
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
@@ -520,10 +717,18 @@ export default function ManagerWhatsAppChat() {
               {/* Reply input */}
               <div className="px-4 py-3 border-t bg-card">
                 <div className="flex items-center gap-2">
-                  <Button variant="ghost" size="sm" className="h-9 w-9 p-0 text-muted-foreground shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 w-9 p-0 text-muted-foreground shrink-0"
+                  >
                     <Paperclip className="h-4 w-4" />
                   </Button>
-                  <Button variant="ghost" size="sm" className="h-9 w-9 p-0 text-muted-foreground shrink-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-9 w-9 p-0 text-muted-foreground shrink-0"
+                  >
                     <Smile className="h-4 w-4" />
                   </Button>
                   <Input
@@ -564,7 +769,8 @@ export default function ManagerWhatsAppChat() {
               <div>
                 <h3 className="font-semibold text-lg">WhatsApp Chat</h3>
                 <p className="text-sm text-muted-foreground mt-1 max-w-sm">
-                  Pilih percakapan dari daftar di sebelah kiri untuk mulai melihat dan membalas pesan.
+                  Pilih percakapan dari daftar di sebelah kiri untuk mulai melihat dan membalas
+                  pesan.
                 </p>
               </div>
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -572,10 +778,18 @@ export default function ManagerWhatsAppChat() {
                 <span>Gateway terhubung • {chats.length} percakapan aktif</span>
               </div>
               {chats.length === 0 && (
-                <Button variant="outline" size="sm" onClick={refreshChats} disabled={loadingChats}>
-                  <RefreshCw className={`h-4 w-4 mr-2 ${loadingChats ? "animate-spin" : ""}`} />
-                  Muat Ulang Chat
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={fetchHistory} disabled={loadingChats}>
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    Load Semua Chat
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={refreshChats} disabled={loadingChats}>
+                    <RefreshCw
+                      className={`h-3.5 w-3.5 mr-1 ${loadingChats ? "animate-spin" : ""}`}
+                    />
+                    Refresh
+                  </Button>
+                </div>
               )}
             </div>
           )}
@@ -583,20 +797,39 @@ export default function ManagerWhatsAppChat() {
       </div>
 
       {/* Image Preview Modal */}
-      {imagePreview && (
+      {imagePreviewUrl && (
         <div
           className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
-          onClick={() => setImagePreview(null)}
+          onClick={() => {
+            setImagePreviewUrl(null);
+            setImageLoading(false);
+          }}
         >
           <button
-            className="absolute top-4 right-4 text-white/80 hover:text-white"
-            onClick={() => setImagePreview(null)}
+            className="absolute top-4 right-4 text-white/80 hover:text-white z-10"
+            onClick={() => {
+              setImagePreviewUrl(null);
+              setImageLoading(false);
+            }}
           >
             <X className="h-6 w-6" />
           </button>
-          <div className="bg-card rounded-lg p-4 max-w-lg w-full text-center">
-            <ImgIcon className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
-            <p className="text-sm text-muted-foreground">Gambar akan dimuat dari server</p>
+          <div className="relative max-w-2xl w-full" onClick={(e) => e.stopPropagation()}>
+            {imageLoading && (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 text-white animate-spin" />
+              </div>
+            )}
+            <img
+              src={imagePreviewUrl}
+              alt="Preview"
+              className={`w-full h-auto max-h-[80vh] object-contain rounded-lg ${imageLoading ? "hidden" : ""}`}
+              onLoad={() => setImageLoading(false)}
+              onError={() => {
+                setImageLoading(false);
+                toast.error("Gagal memuat gambar");
+              }}
+            />
           </div>
         </div>
       )}

@@ -5,7 +5,7 @@ const QRCode = require('qrcode');
 const qrcodeTerminal = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 
 const app = express();
@@ -19,6 +19,10 @@ const AUTH_SESSION_DIR = path.join(__dirname, 'auth_session');
 let sock = null;
 let connectionStatus = 'disconnected'; // 'disconnected' | 'connecting' | 'connected'
 let latestQr = null;
+
+// In-memory stores (populated from Baileys events)
+const chatStore = new Map(); // chatId -> Chat object
+const contactStore = new Map(); // contactId -> Contact object
 
 // ── Message Cache (in-memory) ──────────────────────────────────────────
 // Menyimpan pesan real-time dari Baileys agar bisa dibaca dari frontend.
@@ -86,20 +90,54 @@ function cacheMessage(msg) {
   }
 }
 
+function resolveContactName(jid) {
+  // Try contactStore first (most reliable)
+  const contact = contactStore.get(jid);
+  if (contact) {
+    if (contact.name) return contact.name;
+    if (contact.notify) return contact.notify;
+  }
+  // Try chatStore
+  const chat = chatStore.get(jid);
+  if (chat) {
+    if (chat.name) return chat.name;
+    if (chat.pushName) return chat.pushName;
+  }
+  // Fallback to JID
+  return jid.replace(/@s\.whatsapp\.net$/, '').replace(/@g\.us$/, '') || jid;
+}
+
 function getChatList() {
   const chats = [];
+  
+  // Include chats from messageCache
   for (const [jid, messages] of messageCache.entries()) {
+    if (jid === 'status@broadcast') continue;
     const lastMsg = messages[messages.length - 1];
-    if (!lastMsg) continue;
+    const name = resolveContactName(jid);
     const unread = messages.filter(m => !m.isFromMe && !m.read).length;
     chats.push({
       jid,
-      name: jid.replace(/@s\.whatsapp\.net$/, '').replace(/@g\.us$/, ' (group)'),
-      lastMessage: lastMsg,
+      name,
+      lastMessage: lastMsg || null,
       unreadCount: unread,
       messageCount: messages.length,
     });
+  }    // Also include chats from chatStore that have no messages yet
+  for (const [jid] of chatStore) {
+    if (jid === 'status@broadcast') continue;
+    if (messageCache.has(jid)) continue; // already added above
+    const name = resolveContactName(jid);
+    
+    chats.push({
+      jid,
+      name,
+      lastMessage: null,
+      unreadCount: 0,
+      messageCount: 0,
+    });
   }
+  
   chats.sort((a, b) => (b.lastMessage?.timestamp || 0) - (a.lastMessage?.timestamp || 0));
   return chats.slice(0, MAX_CHATS);
 }
@@ -113,7 +151,7 @@ async function connectToWhatsApp() {
 
     sock = makeWASocket({
       auth: state,
-      printQRInTerminal: false, // We will print manually to capture both outputs
+      printQRInTerminal: false,
       logger: pino({ level: 'error' }),
     });
 
@@ -124,6 +162,71 @@ async function connectToWhatsApp() {
       if (upsert.type !== 'notify') return;
       for (const msg of upsert.messages) {
         cacheMessage(msg);
+      }
+    });
+
+    // ── Store chat history from initial sync ──────────────────────────────
+    sock.ev.on('messaging-history.set', (history) => {
+      console.log(`History sync: ${history.messages?.length || 0} msgs, ${history.chats?.length || 0} chats, ${history.contacts?.length || 0} contacts`);
+      
+      // Store chats
+      if (history.chats) {
+        for (const chat of history.chats) {
+          if (chat.id) chatStore.set(chat.id, chat);
+        }
+      }
+      
+      // Store contacts
+      if (history.contacts) {
+        for (const contact of history.contacts) {
+          if (contact.id) contactStore.set(contact.id, contact);
+        }
+      }
+      
+      // Cache messages
+      if (history.messages) {
+        for (const msg of history.messages) {
+          if (msg && msg.key) {
+            cacheMessage(msg);
+          }
+        }
+      }
+      
+      console.log(`Store: ${chatStore.size} chats, ${contactStore.size} contacts`);
+    });
+
+    // ── Chat lifecycle events ──────────────────────────────────────────────
+    sock.ev.on('chats.upsert', (chats) => {
+      for (const chat of chats) {
+        if (chat.id) chatStore.set(chat.id, chat);
+      }
+    });
+    sock.ev.on('chats.update', (updates) => {
+      for (const update of updates) {
+        if (update.id) {
+          const existing = chatStore.get(update.id);
+          chatStore.set(update.id, { ...existing, ...update });
+        }
+      }
+    });
+    sock.ev.on('chats.delete', (jids) => {
+      for (const jid of jids) {
+        chatStore.delete(jid);
+      }
+    });
+
+    // ── Contact lifecycle events ───────────────────────────────────────────
+    sock.ev.on('contacts.upsert', (contacts) => {
+      for (const contact of contacts) {
+        if (contact.id) contactStore.set(contact.id, contact);
+      }
+    });
+    sock.ev.on('contacts.update', (updates) => {
+      for (const update of updates) {
+        if (update.id) {
+          const existing = contactStore.get(update.id);
+          contactStore.set(update.id, { ...existing, ...update });
+        }
       }
     });
 
@@ -171,51 +274,6 @@ async function connectToWhatsApp() {
         connectionStatus = 'connected';
         latestQr = null;
         console.log('WhatsApp connected successfully!');
-        
-        // Fetch chat history after connection
-        setTimeout(async () => {
-          try {
-            console.log('Fetching chat history...');
-            const chats = await sock.store?.chats?.all() || [];
-            console.log(`Found ${chats.length} chats in store`);
-            
-            // Fetch recent messages for each chat
-            for (const chat of chats.slice(0, 20)) {
-              try {
-                const jid = chat.id;
-                if (!jid || jid === 'status@broadcast') continue;
-                
-                // Get messages from store
-                const msgs = await sock.store?.messages?.get(jid) || [];
-                const msgArray = Array.isArray(msgs) ? msgs : Array.from(msgs.values?.() || []);
-                
-                // Cache recent messages (last 50 per chat)
-                const recentMsgs = msgArray.slice(-50);
-                for (const msg of recentMsgs) {
-                  if (msg && msg.key) {
-                    cacheMessage(msg);
-                  }
-                }
-                
-                // Get contact name from chat
-                const pushName = chat.pushName || chat.name || '';
-                if (pushName) {
-                  const chatMsgs = messageCache.get(jid);
-                  if (chatMsgs) {
-                    for (const m of chatMsgs) {
-                      if (m.name === undefined) m.name = pushName;
-                    }
-                  }
-                }
-              } catch (err) {
-                // Skip this chat on error
-              }
-            }
-            console.log('Chat history loaded successfully');
-          } catch (err) {
-            console.error('Error fetching chat history:', err.message);
-          }
-        }, 2000); // Wait 2s for store to be ready
       }
 
       if (connection === 'close') {
@@ -417,6 +475,42 @@ app.post('/api/connect', async (req, res) => {
   res.json({ success: true, message: 'Connecting initialized' });
 });
 
+// ── POST /api/reconnect — Force fresh connection (triggers history sync) ──
+app.post('/api/reconnect', async (req, res) => {
+  try {
+    console.log('Force reconnecting...');
+    
+    // Disconnect current socket
+    if (sock) {
+      try {
+        sock.end();
+      } catch (e) {}
+      sock = null;
+    }
+    
+    // Clear stores
+    chatStore.clear();
+    contactStore.clear();
+    messageCache.clear();
+    
+    // Delete session for fresh connection
+    try {
+      fs.rmSync(AUTH_SESSION_DIR, { recursive: true, force: true });
+    } catch (e) {}
+    
+    connectionStatus = 'disconnected';
+    latestQr = null;
+    
+    // Reconnect
+    setTimeout(() => connectToWhatsApp(), 1000);
+    
+    res.json({ success: true, message: 'Reconnecting... Scan QR code when ready' });
+  } catch (err) {
+    console.error('Error reconnecting:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/chats — List all cached chats ────────────────────────────
 app.get('/api/chats', (req, res) => {
   if (connectionStatus !== 'connected' || !sock) {
@@ -430,65 +524,87 @@ app.get('/api/chats', (req, res) => {
   }
 });
 
-// ── POST /api/refresh-chats — Manually refresh chat history from server ──
+// ── POST /api/refresh-chats — Return all cached chats ──
 app.post('/api/refresh-chats', async (req, res) => {
   if (connectionStatus !== 'connected' || !sock) {
     return res.status(400).json({ error: 'WhatsApp Gateway is not connected' });
   }
   try {
-    console.log('Manually refreshing chat history...');
+    // Merge chat store with message cache
+    const chats = getChatList();
     
-    // Try to get chats from store
-    let chatList = [];
-    try {
-      chatList = await sock.store?.chats?.all() || [];
-    } catch (e) {
-      console.warn('Store chats not available:', e.message);
-    }
-    
-    let loaded = 0;
-    for (const chat of chatList.slice(0, 30)) {
-      try {
-        const jid = chat.id;
-        if (!jid || jid === 'status@broadcast') continue;
-        
-        // Skip if already cached
-        if (messageCache.has(jid) && messageCache.get(jid).length > 0) continue;
-        
-        // Get messages from store
-        const msgs = await sock.store?.messages?.get(jid) || [];
-        const msgArray = Array.isArray(msgs) ? msgs : Array.from(msgs.values?.() || []);
-        
-        // Cache recent messages
-        const recentMsgs = msgArray.slice(-50);
-        for (const msg of recentMsgs) {
-          if (msg && msg.key) {
-            cacheMessage(msg);
-          }
-        }
-        
-        // Get contact name
-        const pushName = chat.pushName || chat.name || '';
-        if (pushName) {
-          const chatMsgs = messageCache.get(jid);
-          if (chatMsgs) {
-            for (const m of chatMsgs) {
-              if (m.name === undefined) m.name = pushName;
-            }
-          }
-        }
-        
-        loaded++;
-      } catch (err) {
-        // Skip this chat
+    // Add chats from chatStore that don't have messages yet
+    for (const [jid, chat] of chatStore) {
+      if (jid === 'status@broadcast') continue;
+      if (!messageCache.has(jid)) {
+        // Create a placeholder entry
+        messageCache.set(jid, []);
       }
     }
     
-    const chats = getChatList();
-    console.log(`Refresh complete: ${loaded} chats loaded, ${chats.length} total chats`);
-    res.json({ success: true, chats, loaded });
+    // Rebuild chat list after merge
+    const mergedChats = getChatList();
+    
+    console.log(`Refresh: ${chatStore.size} chats in store, ${mergedChats.length} total`);
+    res.json({ success: true, chats: mergedChats, loaded: chatStore.size });
   } catch (err) {
     console.error('Error refreshing chats:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/fetch-history — Request history for specific chats ──
+app.post('/api/fetch-history', async (req, res) => {
+  if (connectionStatus !== 'connected' || !sock) {
+    return res.status(400).json({ error: 'WhatsApp Gateway is not connected' });
+  }
+  try {
+    console.log('Fetching chat history...');
+    let loaded = 0;
+    
+    // Collect all known JIDs that have no cached messages
+    const jidsToFetch = [];
+    for (const [jid] of chatStore) {
+      if (jid === 'status@broadcast') continue;
+      const msgs = messageCache.get(jid);
+      if (!msgs || msgs.length === 0) {
+        jidsToFetch.push(jid);
+      }
+    }
+    // Also from contacts
+    for (const [jid] of contactStore) {
+      if (jid === 'status@broadcast') continue;
+      if (!chatStore.has(jid) && !messageCache.has(jid)) {
+        jidsToFetch.push(jid);
+      }
+    }
+    
+  
+    
+    console.log(`Fetching history for ${jidsToFetch.length} chats...`);
+    
+    for (const jid of jidsToFetch.slice(0, 20)) {
+      try {
+        await sock.fetchMessageHistory(50, undefined, undefined);
+        await new Promise(r => setTimeout(r, 500)); // Rate limit
+      } catch (err) {
+        console.warn(`Failed to fetch history for ${jid}:`, err.message);
+      }
+    }
+    
+    // Wait for events to process
+    await new Promise(r => setTimeout(r, 2000));
+    
+    const chats = getChatList();
+    console.log(`History fetch complete: ${chats.length} total chats`);
+    res.json({ 
+      success: true, 
+      chats, 
+      chatCount: chatStore.size,
+      contactCount: contactStore.size
+    });
+  } catch (err) {
+    console.error('Error fetching history:', err);
     res.status(500).json({ error: err.message });
   }
 });
