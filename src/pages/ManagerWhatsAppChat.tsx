@@ -111,9 +111,12 @@ export default function ManagerWhatsAppChat() {
   const [showMobileChat, setShowMobileChat] = useState(false);
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [imageLoading, setImageLoading] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState<{ file: File; dataUrl: string; preview: string }[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const replyInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const lastMsgTimestampRef = useRef<number>(0);
 
   // ── Check gateway status ──
@@ -272,39 +275,57 @@ export default function ManagerWhatsAppChat() {
     setTimeout(() => replyInputRef.current?.focus(), 100);
   };
 
-  // ── Send reply ──
+  // ── Send reply (text + optional media) ──
   const handleSendReply = async () => {
-    if (!replyText.trim() || !selectedChat) return;
+    if ((!replyText.trim() && pendingFiles.length === 0) || !selectedChat) return;
     setSending(true);
     try {
+      const body: Record<string, unknown> = {
+        jid: selectedChat.jid,
+        message: replyText.trim() || (pendingFiles.length > 0 ? " " : ""),
+      };
+      // Attach media data URIs
+      if (pendingFiles.length > 0) {
+        body.media = pendingFiles.map((f) => f.dataUrl);
+      }
       const res = await fetch(`${GATEWAY_URL}/api/send-message`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          jid: selectedChat.jid,
-          message: replyText.trim(),
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Gagal mengirim");
+
+      // Determine the type of the first media for display
+      const hasMedia = pendingFiles.length > 0;
+      const firstFile = pendingFiles[0]?.file;
+      let msgType: ChatMessage["type"] = "text";
+      let mediaTypeVal: string | null = null;
+      if (hasMedia && firstFile) {
+        if (firstFile.type.startsWith("image/")) { msgType = "image"; mediaTypeVal = "image"; }
+        else if (firstFile.type.startsWith("video/")) { msgType = "video"; mediaTypeVal = "video"; }
+        else if (firstFile.type.startsWith("audio/")) { msgType = "audio"; mediaTypeVal = "audio"; }
+        else { msgType = "document"; mediaTypeVal = "document"; }
+      }
 
       // Add to local messages immediately
       const newMsg: ChatMessage = {
         id: `local-${Date.now()}`,
         from: "me",
         to: selectedChat.jid,
-        body: replyText.trim(),
+        body: replyText.trim() || (hasMedia ? (firstFile?.name || "Media") : ""),
         timestamp: Date.now(),
-        type: "text",
-        mediaUrl: null,
-        mediaType: null,
-        caption: null,
+        type: msgType,
+        mediaUrl: hasMedia ? pendingFiles[0]?.dataUrl || null : null,
+        mediaType: mediaTypeVal,
+        caption: replyText.trim() || null,
         isFromMe: true,
         chatJid: selectedChat.jid,
       };
       setMessages((prev) => [...prev, newMsg]);
       lastMsgTimestampRef.current = newMsg.timestamp;
       setReplyText("");
+      setPendingFiles([]);
 
       // Update chat list: move this chat to top with the new last message
       setChats((prev) => {
@@ -313,7 +334,6 @@ export default function ManagerWhatsAppChat() {
             ? { ...c, lastMessage: newMsg, messageCount: c.messageCount + 1 }
             : c
         );
-        // Sort by last message timestamp descending
         updated.sort((a, b) => (b.lastMessage?.timestamp || 0) - (a.lastMessage?.timestamp || 0));
         return updated;
       });
@@ -328,6 +348,49 @@ export default function ManagerWhatsAppChat() {
   const handleImagePreview = (jid: string, msgId: string) => {
     setImageLoading(true);
     setImagePreviewUrl(mediaUrl(jid, msgId));
+  };
+
+  // ── File upload helpers ──
+  const MAX_FILE_SIZE = 16 * 1024 * 1024; // 16MB per file
+  const MAX_FILES = 5;
+
+  const handleFileSelect = (files: FileList | null) => {
+    if (!files) return;
+    const arr = Array.from(files).slice(0, MAX_FILES - pendingFiles.length);
+    for (const file of arr) {
+      if (file.size > MAX_FILE_SIZE) {
+        toast.error(`${file.name} terlalu besar (maks 16MB)`);
+        continue;
+      }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        const isImage = file.type.startsWith("image/");
+        const isVideo = file.type.startsWith("video/");
+        const preview = isImage ? dataUrl : isVideo ? "" : "";
+        setPendingFiles((prev) => [...prev, { file, dataUrl, preview }]);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const removePendingFile = (index: number) => {
+    setPendingFiles((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // ── Drag and drop ──
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    handleFileSelect(e.dataTransfer.files);
   };
 
   // ── Filtered chats ──
@@ -353,6 +416,31 @@ export default function ManagerWhatsAppChat() {
     return (
       <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"} mb-1`}>
         <div className={`max-w-[75%] ${isMe ? "ml-12" : "mr-12"}`}>
+          {/* Local media preview for sent messages */}
+          {isMe && msg.mediaUrl && msg.type === "image" && (
+            <div className="mb-1">
+              <img
+                src={msg.mediaUrl}
+                alt="Sent"
+                className="w-full max-w-[250px] rounded-md object-cover"
+                loading="lazy"
+              />
+            </div>
+          )}
+          {isMe && msg.mediaUrl && msg.type === "video" && (
+            <div className="mb-1">
+              <video controls preload="none" className="w-full max-w-[250px] rounded-md">
+                <source src={msg.mediaUrl} />
+              </video>
+            </div>
+          )}
+          {isMe && msg.mediaUrl && msg.type === "audio" && (
+            <div className="mb-1">
+              <audio controls preload="none" className="h-8 max-w-[250px]">
+                <source src={msg.mediaUrl} />
+              </audio>
+            </div>
+          )}
           {/* Date separator */}
           {showTime && (
             <div
@@ -687,8 +775,22 @@ export default function ManagerWhatsAppChat() {
               </div>
 
               {/* Messages area */}
-              <ScrollArea className="flex-1 bg-[#e5ddd5]/30 dark:bg-muted/20">
-                <div className="px-4 py-3 space-y-0.5">
+              <ScrollArea
+                className="flex-1 bg-[#e5ddd5]/30 dark:bg-muted/20"
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
+                {/* Drag overlay */}
+                {isDragging && (
+                  <div className="absolute inset-0 z-10 bg-primary/10 border-2 border-dashed border-primary rounded-lg flex items-center justify-center">
+                    <div className="text-center">
+                      <ImgIcon className="h-10 w-10 text-primary mx-auto mb-2" />
+                      <p className="text-sm font-medium text-primary">Lepas file di sini</p>
+                    </div>
+                  </div>
+                )}
+                <div className="px-4 py-3 space-y-0.5 relative">
                   {loadingMessages ? (
                     <div className="flex items-center justify-center py-12">
                       <Loader2 className="h-6 w-6 text-primary animate-spin" />
@@ -716,11 +818,57 @@ export default function ManagerWhatsAppChat() {
 
               {/* Reply input */}
               <div className="px-4 py-3 border-t bg-card">
+                {/* Pending files preview */}
+                {pendingFiles.length > 0 && (
+                  <div className="flex gap-2 mb-2 overflow-x-auto pb-1">
+                    {pendingFiles.map((f, idx) => (
+                      <div key={idx} className="relative shrink-0">
+                        {f.file.type.startsWith("image/") ? (
+                          <img
+                            src={f.dataUrl}
+                            alt={f.file.name}
+                            className="h-16 w-16 object-cover rounded-md border"
+                          />
+                        ) : f.file.type.startsWith("video/") ? (
+                          <div className="h-16 w-16 rounded-md border bg-muted flex items-center justify-center">
+                            <Video className="h-6 w-6 text-muted-foreground" />
+                          </div>
+                        ) : (
+                          <div className="h-16 w-16 rounded-md border bg-muted flex items-center justify-center">
+                            <FileText className="h-6 w-6 text-muted-foreground" />
+                          </div>
+                        )}
+                        <button
+                          onClick={() => removePendingFile(idx)}
+                          className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-destructive text-destructive-foreground flex items-center justify-center"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                        <p className="text-[9px] text-muted-foreground truncate w-16 mt-0.5">
+                          {f.file.name}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+                    multiple
+                    onChange={(e) => {
+                      handleFileSelect(e.target.files);
+                      e.target.value = "";
+                    }}
+                  />
                   <Button
                     variant="ghost"
                     size="sm"
                     className="h-9 w-9 p-0 text-muted-foreground shrink-0"
+                    onClick={() => fileInputRef.current?.click()}
+                    title="Lampirkan file"
                   >
                     <Paperclip className="h-4 w-4" />
                   </Button>
@@ -728,8 +876,10 @@ export default function ManagerWhatsAppChat() {
                     variant="ghost"
                     size="sm"
                     className="h-9 w-9 p-0 text-muted-foreground shrink-0"
+                    onClick={() => fileInputRef.current?.click()}
+                    title="Kirim gambar"
                   >
-                    <Smile className="h-4 w-4" />
+                    <ImgIcon className="h-4 w-4" />
                   </Button>
                   <Input
                     ref={replyInputRef}
@@ -749,7 +899,7 @@ export default function ManagerWhatsAppChat() {
                     size="sm"
                     className="h-9 w-9 p-0 bg-success text-success-foreground hover:bg-success/90 shrink-0"
                     onClick={handleSendReply}
-                    disabled={!replyText.trim() || sending}
+                    disabled={(!replyText.trim() && pendingFiles.length === 0) || sending}
                   >
                     {sending ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
