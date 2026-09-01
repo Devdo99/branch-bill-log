@@ -133,6 +133,22 @@ export default function ManagerWhatsAppChat() {
     }
   }, [status]);
 
+  // ── Refresh chats from server ──
+  const refreshChats = async () => {
+    setLoadingChats(true);
+    try {
+      const res = await fetch(`${GATEWAY_URL}/api/refresh-chats`, { method: "POST" });
+      if (!res.ok) throw new Error("Gagal refresh chat");
+      const data = await res.json();
+      setChats(data.chats || []);
+      toast.success(`Berhasil memuat ${data.loaded || 0} chat dari server`);
+    } catch (err: any) {
+      toast.error(err.message || "Gagal refresh chat");
+    } finally {
+      setLoadingChats(false);
+    }
+  };
+
   // ── Load messages for selected chat ──
   const loadMessages = useCallback(async (jid: string) => {
     setLoadingMessages(true);
@@ -343,9 +359,21 @@ export default function ManagerWhatsAppChat() {
               <MessageSquare className="h-5 w-5 text-primary" />
               <h3 className="font-semibold text-sm">Chat</h3>
             </div>
-            <Badge variant="outline" className="text-[10px]">
-              {chats.length} percakapan
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-[10px]">
+                {chats.length} percakapan
+              </Badge>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0"
+                onClick={refreshChats}
+                disabled={loadingChats}
+                title="Muat ulang chat"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${loadingChats ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
           </div>
 
           {/* Search */}
@@ -543,6 +571,12 @@ export default function ManagerWhatsAppChat() {
                 <CheckCircle2 className="h-3.5 w-3.5 text-success" />
                 <span>Gateway terhubung • {chats.length} percakapan aktif</span>
               </div>
+              {chats.length === 0 && (
+                <Button variant="outline" size="sm" onClick={refreshChats} disabled={loadingChats}>
+                  <RefreshCw className={`h-4 w-4 mr-2 ${loadingChats ? "animate-spin" : ""}`} />
+                  Muat Ulang Chat
+                </Button>
+              )}
             </div>
           )}
         </div>

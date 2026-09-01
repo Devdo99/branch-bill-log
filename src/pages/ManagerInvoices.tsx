@@ -15,6 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { toast } from "sonner";
 import { Search, FileDown, FileSpreadsheet, Image as ImgIcon, MessageCircle, Eye, ZoomIn, ZoomOut, RotateCw, Pencil, Trash2, Receipt, Wallet, CheckCircle2, Clock, Settings2, RotateCcw, Archive, ListChecks, RefreshCw, Users, Send, AlertTriangle, Calendar as CalendarIcon, ChevronDown, Plus, X } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
+import ContactPicker from "@/components/ContactPicker";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -1388,8 +1389,14 @@ export default function ManagerInvoices() {
                 </div>
               ) : (
                 <>
-                  <Input placeholder="cth: 628123456789" value={waPhone} onChange={(e) => setWaPhone(e.target.value)} />
-                  <div className="text-xs text-muted-foreground">Kosongkan untuk memilih kontak saat dialihkan ke WhatsApp.</div>
+                  <div className="flex items-center gap-2">
+                    <Input placeholder="cth: 628123456789" value={waPhone} onChange={(e) => setWaPhone(e.target.value)} className="flex-1" />
+                    <ContactPicker
+                      onSelect={(phone) => setWaPhone(phone)}
+                      value={waPhone}
+                    />
+                  </div>
+                  <div className="text-xs text-muted-foreground">Ketik nomor atau pilih dari kontak WhatsApp.</div>
                 </>
               )}
             </div>

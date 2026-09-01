@@ -171,6 +171,51 @@ async function connectToWhatsApp() {
         connectionStatus = 'connected';
         latestQr = null;
         console.log('WhatsApp connected successfully!');
+        
+        // Fetch chat history after connection
+        setTimeout(async () => {
+          try {
+            console.log('Fetching chat history...');
+            const chats = await sock.store?.chats?.all() || [];
+            console.log(`Found ${chats.length} chats in store`);
+            
+            // Fetch recent messages for each chat
+            for (const chat of chats.slice(0, 20)) {
+              try {
+                const jid = chat.id;
+                if (!jid || jid === 'status@broadcast') continue;
+                
+                // Get messages from store
+                const msgs = await sock.store?.messages?.get(jid) || [];
+                const msgArray = Array.isArray(msgs) ? msgs : Array.from(msgs.values?.() || []);
+                
+                // Cache recent messages (last 50 per chat)
+                const recentMsgs = msgArray.slice(-50);
+                for (const msg of recentMsgs) {
+                  if (msg && msg.key) {
+                    cacheMessage(msg);
+                  }
+                }
+                
+                // Get contact name from chat
+                const pushName = chat.pushName || chat.name || '';
+                if (pushName) {
+                  const chatMsgs = messageCache.get(jid);
+                  if (chatMsgs) {
+                    for (const m of chatMsgs) {
+                      if (m.name === undefined) m.name = pushName;
+                    }
+                  }
+                }
+              } catch (err) {
+                // Skip this chat on error
+              }
+            }
+            console.log('Chat history loaded successfully');
+          } catch (err) {
+            console.error('Error fetching chat history:', err.message);
+          }
+        }, 2000); // Wait 2s for store to be ready
       }
 
       if (connection === 'close') {
@@ -381,6 +426,69 @@ app.get('/api/chats', (req, res) => {
     const chats = getChatList();
     res.json({ chats });
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/refresh-chats — Manually refresh chat history from server ──
+app.post('/api/refresh-chats', async (req, res) => {
+  if (connectionStatus !== 'connected' || !sock) {
+    return res.status(400).json({ error: 'WhatsApp Gateway is not connected' });
+  }
+  try {
+    console.log('Manually refreshing chat history...');
+    
+    // Try to get chats from store
+    let chatList = [];
+    try {
+      chatList = await sock.store?.chats?.all() || [];
+    } catch (e) {
+      console.warn('Store chats not available:', e.message);
+    }
+    
+    let loaded = 0;
+    for (const chat of chatList.slice(0, 30)) {
+      try {
+        const jid = chat.id;
+        if (!jid || jid === 'status@broadcast') continue;
+        
+        // Skip if already cached
+        if (messageCache.has(jid) && messageCache.get(jid).length > 0) continue;
+        
+        // Get messages from store
+        const msgs = await sock.store?.messages?.get(jid) || [];
+        const msgArray = Array.isArray(msgs) ? msgs : Array.from(msgs.values?.() || []);
+        
+        // Cache recent messages
+        const recentMsgs = msgArray.slice(-50);
+        for (const msg of recentMsgs) {
+          if (msg && msg.key) {
+            cacheMessage(msg);
+          }
+        }
+        
+        // Get contact name
+        const pushName = chat.pushName || chat.name || '';
+        if (pushName) {
+          const chatMsgs = messageCache.get(jid);
+          if (chatMsgs) {
+            for (const m of chatMsgs) {
+              if (m.name === undefined) m.name = pushName;
+            }
+          }
+        }
+        
+        loaded++;
+      } catch (err) {
+        // Skip this chat
+      }
+    }
+    
+    const chats = getChatList();
+    console.log(`Refresh complete: ${loaded} chats loaded, ${chats.length} total chats`);
+    res.json({ success: true, chats, loaded });
+  } catch (err) {
+    console.error('Error refreshing chats:', err);
     res.status(500).json({ error: err.message });
   }
 });
