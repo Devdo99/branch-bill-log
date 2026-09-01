@@ -19,6 +19,7 @@ import ManagerProfitLoss from "./pages/ManagerProfitLoss.tsx";
 import ManagerPayments from "./pages/ManagerPayments.tsx";
 import ManagerAdmins from "./pages/ManagerAdmins.tsx";
 import ManagerWhatsApp from "./pages/ManagerWhatsApp.tsx";
+import ManagerWhatsAppChat from "./pages/ManagerWhatsAppChat.tsx";
 import ManagerBackup from "./pages/ManagerBackup.tsx";
 import ManagerGoogleSheets from "./pages/ManagerGoogleSheets.tsx";
 import KasirDashboard from "./pages/KasirDashboard.tsx";
@@ -53,6 +54,7 @@ const App = () => (
               <Route path="/manager/cashiers" element={<RequireAuth role={["manager", "admin"]} requireBranch><ManagerCashiers /></RequireAuth>} />
               <Route path="/manager/admins" element={<RequireAuth role="manager" requireBranch><ManagerAdmins /></RequireAuth>} />
               <Route path="/manager/whatsapp" element={<RequireAuth role="manager" requireBranch><ManagerWhatsApp /></RequireAuth>} />
+            <Route path="/manager/whatsapp/chat" element={<RequireAuth role={["manager", "admin"]} requireBranch><ManagerWhatsAppChat /></RequireAuth>} />
               <Route path="/manager/backup" element={<RequireAuth role="manager" requireBranch><ManagerBackup /></RequireAuth>} />
               <Route path="/manager/google-sheets" element={<RequireAuth role="manager" requireBranch><ManagerGoogleSheets /></RequireAuth>} />
               <Route path="/kasir" element={<RequireAuth role="kasir"><KasirDashboard /></RequireAuth>} />

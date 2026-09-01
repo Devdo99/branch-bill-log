@@ -104,6 +104,7 @@ Aplikasi ini menggunakan beberapa tabel utama di PostgreSQL (Supabase):
 
 | Tanggal | Versi | Perubahan / Update | Keterangan |
 | :--- | :--- | :--- | :--- |
+| 2026-09-01 | `1.7.0` | WhatsApp Chat Viewer | Membuat halaman chat WhatsApp real-time (mirip WhatsApp Web) dengan daftar percakapan, pesan thread, kirim balasan, dan loading state. Terintegrasi dengan WhatsApp Gateway backend. |
 | 2026-09-01 | `1.6.0` | Ekspor PDF Profesional dengan Branding | Membuat modul `src/lib/pdf.ts` dengan template PDF profesional: logo NotaKu, header bersusun, section berwarna, tabel dengan zebra-striping, status badge, footer halaman. Mengupdate export PDF di halaman Laba Rugi dan Daftar Nota. |
 | 2026-08-02 | `1.5.0` | Laporan Pembayaran & Ekspor Excel | Membuat halaman laporan pembayaran dengan filter tanggal (tanggal nota/bayar) dan status pembayaran, serta ekspor file Excel (.xlsx). |
 | 2026-08-02 | `1.4.0` | Integrasi WhatsApp Gateway Hibrida | Mengembangkan backend Express + Baileys, membuat halaman pengaturan WhatsApp Gateway, dan mengintegrasikan pengiriman pesan di latar belakang dengan fallback wa.me. |

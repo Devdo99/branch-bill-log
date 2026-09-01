@@ -213,6 +213,7 @@ export default function AppShell({ children, title }: Props) {
             { to: "/manager/admins", label: "Kelola Admin", managerOnly: true },
             { to: "/manager/branches", label: "Kelola Cabang", managerOnly: true },
           { to: "/manager/whatsapp", label: "WhatsApp Gateway", managerOnly: true },
+        { to: "/manager/whatsapp/chat", label: "WhatsApp Chat", perm: "manage_invoices" as const, viewPerm: true },
           { to: "/manager/backup", label: "Backup & Restore", managerOnly: true },
           { to: "/manager/google-sheets", label: "Google Sheets", managerOnly: true },
         ]
