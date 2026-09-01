@@ -772,6 +772,33 @@ app.get('/api/contacts', (req, res) => {
   }
 });
 
+// ── GET /api/contacts/map — JID → resolved name map ─────────────────────
+app.get('/api/contacts/map', (req, res) => {
+  if (connectionStatus !== 'connected' || !sock) {
+    return res.status(400).json({ error: 'WhatsApp Gateway is not connected' });
+  }
+  try {
+    const map = {};
+    // From contactStore (phone contacts, pushName)
+    for (const [jid, contact] of contactStore) {
+      if (jid === 'status@broadcast') continue;
+      const name = (contact && (contact.name || contact.notify)) || '';
+      if (name) map[jid] = name;
+    }
+    // From chatStore (pushName)
+    for (const [jid, chat] of chatStore) {
+      if (jid === 'status@broadcast') continue;
+      if (!map[jid]) {
+        const name = (chat && (chat.pushName || chat.subject || chat.name)) || '';
+        if (name) map[jid] = name;
+      }
+    }
+    res.json({ map });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/messages — Global search across all chats ─────────────────
 app.get('/api/messages', (req, res) => {
   if (connectionStatus !== 'connected' || !sock) {

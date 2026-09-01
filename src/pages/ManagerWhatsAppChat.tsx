@@ -63,6 +63,27 @@ type ConnectionState = "offline" | "disconnected" | "connecting" | "connected";
 // ── Helpers ────────────────────────────────────────────────────────
 const GATEWAY_URL = "http://localhost:5000";
 
+/** Build a JID → display-name map from the contacts/map endpoint */
+function useContactMap(status: ConnectionState) {
+  const [map, setMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (status !== "connected") return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch(`${GATEWAY_URL}/api/contacts/map`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data.map) setMap(data.map);
+      } catch { /* ignore */ }
+    };
+    load();
+    const interval = setInterval(load, 15000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [status]);
+  return map;
+}
+
 function formatTime(ts: number) {
   if (!ts) return "";
   const d = new Date(ts);
@@ -124,6 +145,8 @@ export default function ManagerWhatsAppChat() {
   const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [showChatSearch, setShowChatSearch] = useState(false);
   const [contextMenu, setContextMenu] = useState<{ msg: ChatMessage; x: number; y: number } | null>(null);
+
+  const contactMap = useContactMap(status);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const replyInputRef = useRef<HTMLInputElement>(null);
@@ -419,17 +442,16 @@ export default function ManagerWhatsAppChat() {
   };
 
   // ── Resolve name from JID for display ──
-  const resolveName = (jid: string) => {
+  const resolveName = useCallback((jid: string) => {
     if (!jid) return jid;
-    // For group messages, try to find the participant name from chat context
-    if (isGroupJid(selectedChat?.jid || "")) {
-      // Try to find name from messages where this participant sent
-      const foundMsg = messages.find((m) => m.from === jid && m.body);
-      // Just strip JID suffix as fallback
-      return jid.replace(/@s\.whatsapp\.net$/, "").replace(/@g\.us$/, "") || jid;
-    }
+    // 1) Check the contact map from backend (most reliable)
+    if (contactMap[jid]) return contactMap[jid];
+    // 2) Check the chats list for a matching name
+    const chatEntry = chats.find((c) => c.jid === jid);
+    if (chatEntry && chatEntry.name && !chatEntry.name.startsWith(jid.split("@")[0])) return chatEntry.name;
+    // 3) Strip JID suffix as last resort
     return jid.replace(/@s\.whatsapp\.net$/, "").replace(/@g\.us$/, "") || jid;
-  };
+  }, [contactMap, chats]);
 
   // ── Start reply on message click ──
   const handleStartReply = (msg: ChatMessage) => {
@@ -604,7 +626,7 @@ export default function ManagerWhatsAppChat() {
             {/* Group sender name */}
             {!isMe && isGroupJid(msg.chatJid) && msg.from && (
               <p className="text-[10px] font-semibold text-primary mb-0.5">
-                {msg.from.replace(/@s\.whatsapp\.net$/, "").replace(/@g\.us$/, "")}
+                {resolveName(msg.from)}
               </p>
             )}
 
@@ -750,10 +772,10 @@ export default function ManagerWhatsAppChat() {
 
   return (
     <AppShell title="WhatsApp Chat">
-      <div className="flex h-[calc(100vh-12rem)] rounded-lg border overflow-hidden bg-card">
+      <div className="flex h-[calc(100vh-9rem)] sm:h-[calc(100vh-10rem)] rounded-lg border overflow-hidden bg-card shadow-sm">
         {/* ── Left Panel: Chat List ── */}
         <div
-          className={`w-full md:w-[340px] border-r flex flex-col ${
+          className={`w-full md:w-[340px] lg:w-[380px] border-r flex flex-col ${
             showMobileChat ? "hidden md:flex" : "flex"
           }`}
         >
@@ -846,13 +868,13 @@ export default function ManagerWhatsAppChat() {
                 >
                   {/* Avatar */}
                   <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                    {isGroupJid(chat.jid) ? "👥" : getInitials(chat.name)}
+                    {isGroupJid(chat.jid) ? "👥" : getInitials(resolveName(chat.jid) || chat.name)}
                   </div>
 
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-sm font-medium truncate">{chat.name}</span>
+                      <span className="text-sm font-medium truncate">{resolveName(chat.jid) || chat.name}</span>
                       <span className="text-[10px] text-muted-foreground shrink-0">
                         {formatTime(chat.lastMessage?.timestamp)}
                       </span>
@@ -890,7 +912,7 @@ export default function ManagerWhatsAppChat() {
           {selectedChat ? (
             <>
               {/* Chat header */}
-              <div className="flex items-center gap-3 px-4 py-3 border-b bg-card">
+              <div className="flex items-center gap-3 px-4 py-2.5 border-b bg-card/95 backdrop-blur sticky top-0 z-10">
                 <Button
                   variant="ghost"
                   size="sm"
@@ -900,10 +922,10 @@ export default function ManagerWhatsAppChat() {
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
-                  {isGroupJid(selectedChat.jid) ? "👥" : getInitials(selectedChat.name)}
+                  {isGroupJid(selectedChat.jid) ? "👥" : getInitials(resolveName(selectedChat.jid) || selectedChat.name)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold truncate">{selectedChat.name}</div>
+                  <div className="text-sm font-semibold truncate">{resolveName(selectedChat.jid) || selectedChat.name}</div>
                   <div className="text-[10px] text-muted-foreground">
                     {isGroupJid(selectedChat.jid) ? "Grup" : "WhatsApp"} • {selectedChat.messageCount} pesan
                   </div>
@@ -956,7 +978,7 @@ export default function ManagerWhatsAppChat() {
 
               {/* Messages area */}
               <ScrollArea
-                className="flex-1 bg-[#e5ddd5]/30 dark:bg-muted/20"
+                className="flex-1 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiMwMDAiIGZpbGwtb3BhY2l0eT0iMC4wMyI+PHBhdGggZD0iTTM2IDM0djItSDI0di0yaDEyek0zNiAyNHYySDI0di0yaDEyeiIvPjwvZz48L2c+PC9zdmc+')] bg-repeat dark:bg-muted/10"
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
