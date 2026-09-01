@@ -121,10 +121,14 @@ export default function ManagerWhatsAppChat() {
   const [pendingFiles, setPendingFiles] = useState<{ file: File; dataUrl: string; preview: string }[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [replyToMsg, setReplyToMsg] = useState<ChatMessage | null>(null);
+  const [chatSearchQuery, setChatSearchQuery] = useState("");
+  const [showChatSearch, setShowChatSearch] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ msg: ChatMessage; x: number; y: number } | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const replyInputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const chatSearchRef = useRef<HTMLInputElement>(null);
   const lastMsgTimestampRef = useRef<number>(0);
 
   // ── Check gateway status ──
@@ -425,6 +429,68 @@ export default function ManagerWhatsAppChat() {
     setTimeout(() => replyInputRef.current?.focus(), 100);
   };
 
+  // ── Context menu (right-click / long-press) ──
+  const handleContextMenu = (e: React.MouseEvent, msg: ChatMessage) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({ msg, x: e.clientX, y: e.clientY });
+  };
+
+  useEffect(() => {
+    const close = () => setContextMenu(null);
+    window.addEventListener("click", close);
+    return () => window.removeEventListener("click", close);
+  }, []);
+
+  // ── Delete message ──
+  const handleDeleteMessage = async (msg: ChatMessage) => {
+    setContextMenu(null);
+    if (!confirm("Hapus pesan ini?")) return;
+    try {
+      const res = await fetch(`${GATEWAY_URL}/api/delete-message`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ jid: msg.chatJid, msgId: msg.id, forMe: msg.isFromMe }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal menghapus");
+      setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+      toast.success("Pesan dihapus");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Gagal menghapus pesan");
+    }
+  };
+
+  // ── Copy message text ──
+  const handleCopyMessage = (msg: ChatMessage) => {
+    setContextMenu(null);
+    navigator.clipboard.writeText(msg.body || "");
+    toast.success("Teks disalin");
+  };
+
+  // ── Format full date for separators ──
+  const formatDateSeparator = (ts: number) => {
+    const d = new Date(ts);
+    const now = new Date();
+    const dayMs = 86400000;
+    const diff = now.getTime() - d.getTime();
+    if (diff < dayMs && now.getDate() === d.getDate()) return "Hari ini";
+    if (diff < 2 * dayMs) return "Kemarin";
+    return d.toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" });
+  };
+
+  const shouldShowDateSeparator = (msg: ChatMessage, prevMsg: ChatMessage | null) => {
+    if (!prevMsg) return true;
+    const d1 = new Date(prevMsg.timestamp);
+    const d2 = new Date(msg.timestamp);
+    return d1.getFullYear() !== d2.getFullYear() || d1.getMonth() !== d2.getMonth() || d1.getDate() !== d2.getDate();
+  };
+
+  // ── Filtered messages by search ──
+  const filteredMessages = chatSearchQuery
+    ? messages.filter((m) => (m.body || "").toLowerCase().includes(chatSearchQuery.toLowerCase()))
+    : messages;
+
   // ── Filtered chats ──
   const filteredChats = chats.filter((c) => {
     if (!searchQuery) return true;
@@ -443,6 +509,7 @@ export default function ManagerWhatsAppChat() {
       !prevMsg ||
       prevMsg.isFromMe !== msg.isFromMe ||
       msg.timestamp - prevMsg.timestamp > 300000; // 5 min gap
+    const showDate = shouldShowDateSeparator(msg, prevMsg);
     const isPending = msg.id.startsWith("local-");
 
     const handleQuotedClick = (e: React.MouseEvent) => {
@@ -451,7 +518,20 @@ export default function ManagerWhatsAppChat() {
     };
 
     return (
-      <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"} mb-1 group/msg`}>
+      <div key={msg.id}>
+      {/* Date separator */}
+      {showDate && (
+        <div className="flex justify-center my-3">
+          <div className="bg-card/80 backdrop-blur-sm border border-border/50 rounded-full px-3 py-1 text-[10px] text-muted-foreground">
+            {formatDateSeparator(msg.timestamp)}
+          </div>
+        </div>
+      )}
+      <div
+        className={`flex ${isMe ? "justify-end" : "justify-start"} mb-1 group/msg cursor-pointer`}
+        onContextMenu={(e) => handleContextMenu(e, msg)}
+        onClick={() => handleStartReply(msg)}
+      >
         <div className={`max-w-[75%] ${isMe ? "ml-12" : "mr-12"}`}>
           {/* Local media preview for sent messages */}
           {isMe && msg.mediaUrl && msg.type === "image" && (
@@ -494,7 +574,6 @@ export default function ManagerWhatsAppChat() {
                 ? "bg-success/10 text-foreground rounded-tr-sm"
                 : "bg-card border border-border text-foreground rounded-tl-sm"
             } ${isPending ? "opacity-70" : ""}`}
-            onClick={handleQuotedClick}
           >
             {/* Quoted message */}
             {msg.quotedMessage && (
@@ -625,6 +704,7 @@ export default function ManagerWhatsAppChat() {
             )}
           </div>
         </div>
+      </div>
       </div>
     );
   };
@@ -821,14 +901,50 @@ export default function ManagerWhatsAppChat() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground">
-                    <Phone className="h-4 w-4" />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 w-8 p-0 text-muted-foreground"
+                    onClick={() => {
+                      setShowChatSearch(!showChatSearch);
+                      if (!showChatSearch) setTimeout(() => chatSearchRef.current?.focus(), 100);
+                    }}
+                  >
+                    <Search className="h-4 w-4" />
                   </Button>
                   <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground">
                     <MoreVertical className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
+              {/* Chat search bar */}
+              {showChatSearch && (
+                <div className="px-4 py-2 border-b bg-card">
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                    <Input
+                      ref={chatSearchRef}
+                      placeholder="Cari di percakapan ini..."
+                      value={chatSearchQuery}
+                      onChange={(e) => setChatSearchQuery(e.target.value)}
+                      className="h-8 pl-8 pr-8 text-xs"
+                    />
+                    {chatSearchQuery && (
+                      <button
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={() => setChatSearchQuery("")}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  {chatSearchQuery && (
+                    <p className="text-[10px] text-muted-foreground mt-1">
+                      {filteredMessages.length} pesan ditemukan
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Messages area */}
               <ScrollArea
@@ -858,13 +974,20 @@ export default function ManagerWhatsAppChat() {
                   ) : (
                     <>
                       {/* Encryption notice */}
-                      <div className="flex justify-center mb-4">
-                        <div className="bg-warning/10 border border-warning/20 rounded-md px-3 py-1.5 text-[10px] text-warning text-center">
-                          🔒 Pesan terenkripsi end-to-end
+                      {!chatSearchQuery && (
+                        <div className="flex justify-center mb-4">
+                          <div className="bg-warning/10 border border-warning/20 rounded-md px-3 py-1.5 text-[10px] text-warning text-center">
+                            🔒 Pesan terenkripsi end-to-end
+                          </div>
                         </div>
-                      </div>
-                      {messages.map((msg, idx) =>
-                        renderMessage(msg, idx > 0 ? messages[idx - 1] : null)
+                      )}
+                      {filteredMessages.map((msg, idx) =>
+                        renderMessage(msg, idx > 0 ? filteredMessages[idx - 1] : null)
+                      )}
+                      {chatSearchQuery && filteredMessages.length === 0 && (
+                        <div className="flex items-center justify-center py-8 text-muted-foreground text-xs">
+                          Tidak ditemukan pesan yang cocok
+                        </div>
                       )}
                     </>
                   )}
@@ -1022,6 +1145,38 @@ export default function ManagerWhatsAppChat() {
           )}
         </div>
       </div>
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          className="fixed z-[60] bg-card border border-border rounded-lg shadow-lg py-1 min-w-[160px]"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            className="w-full px-3 py-2 text-left text-sm hover:bg-muted/50 flex items-center gap-2"
+            onClick={() => handleStartReply(contextMenu.msg)}
+          >
+            <Send className="h-3.5 w-3.5" />
+            Balas
+          </button>
+          <button
+            className="w-full px-3 py-2 text-left text-sm hover:bg-muted/50 flex items-center gap-2"
+            onClick={() => handleCopyMessage(contextMenu.msg)}
+          >
+            <FileText className="h-3.5 w-3.5" />
+            Salin teks
+          </button>
+          <div className="border-t my-1" />
+          <button
+            className="w-full px-3 py-2 text-left text-sm hover:bg-destructive/10 text-destructive flex items-center gap-2"
+            onClick={() => handleDeleteMessage(contextMenu.msg)}
+          >
+            <X className="h-3.5 w-3.5" />
+            Hapus
+          </button>
+        </div>
+      )}
 
       {/* Image Preview Modal */}
       {imagePreviewUrl && (

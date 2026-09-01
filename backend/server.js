@@ -788,6 +788,30 @@ app.get('/api/messages/images', (req, res) => {
   }
 });
 
+// ── POST /api/delete-message — Delete/recall a message ────────────────
+app.post('/api/delete-message', async (req, res) => {
+  if (connectionStatus !== 'connected' || !sock) {
+    return res.status(400).json({ error: 'WhatsApp Gateway is not connected' });
+  }
+  try {
+    const { jid, msgId, forMe } = req.body;
+    if (!jid || !msgId) {
+      return res.status(400).json({ error: 'jid and msgId are required' });
+    }
+    await sock.sendMessage(jid, { delete: { remoteJid: jid, id: msgId, fromMe: !!forMe } });
+    // Remove from cache
+    const msgs = messageCache.get(jid);
+    if (msgs) {
+      const idx = msgs.findIndex(m => m.id === msgId);
+      if (idx !== -1) msgs.splice(idx, 1);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Error deleting message:', err);
+    res.status(500).json({ error: err.message || 'Failed to delete message' });
+  }
+});
+
 // Start Express and connect automatically
 app.listen(PORT, () => {
   console.log(`WhatsApp Gateway server running on port ${PORT}`);
