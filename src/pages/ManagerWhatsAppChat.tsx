@@ -29,6 +29,12 @@ import { EmptyState } from "@/components/EmptyState";
 import { formatDateTime } from "@/lib/format";
 
 // ── Types ──────────────────────────────────────────────────────────
+interface QuotedMessage {
+  body: string;
+  type: string;
+  participant: string | null;
+}
+
 interface ChatMessage {
   id: string;
   from: string;
@@ -41,6 +47,7 @@ interface ChatMessage {
   caption: string | null;
   isFromMe: boolean;
   chatJid: string;
+  quotedMessage: QuotedMessage | null;
 }
 
 interface Chat {
@@ -113,6 +120,7 @@ export default function ManagerWhatsAppChat() {
   const [imageLoading, setImageLoading] = useState(false);
   const [pendingFiles, setPendingFiles] = useState<{ file: File; dataUrl: string; preview: string }[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const [replyToMsg, setReplyToMsg] = useState<ChatMessage | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const replyInputRef = useRef<HTMLInputElement>(null);
@@ -275,6 +283,9 @@ export default function ManagerWhatsAppChat() {
     setTimeout(() => replyInputRef.current?.focus(), 100);
   };
 
+  // ── Cancel reply ──
+  const cancelReply = () => setReplyToMsg(null);
+
   // ── Send reply (text + optional media) ──
   const handleSendReply = async () => {
     if ((!replyText.trim() && pendingFiles.length === 0) || !selectedChat) return;
@@ -287,6 +298,10 @@ export default function ManagerWhatsAppChat() {
       // Attach media data URIs
       if (pendingFiles.length > 0) {
         body.media = pendingFiles.map((f) => f.dataUrl);
+      }
+      // Attach reply context
+      if (replyToMsg) {
+        body.quotedMsgId = replyToMsg.id;
       }
       const res = await fetch(`${GATEWAY_URL}/api/send-message`, {
         method: "POST",
@@ -321,11 +336,17 @@ export default function ManagerWhatsAppChat() {
         caption: replyText.trim() || null,
         isFromMe: true,
         chatJid: selectedChat.jid,
+        quotedMessage: replyToMsg ? {
+          body: replyToMsg.body || (replyToMsg.type === "image" ? "[Gambar]" : replyToMsg.type === "video" ? "[Video]" : "[Pesan]"),
+          type: replyToMsg.type,
+          participant: replyToMsg.from,
+        } : null,
       };
       setMessages((prev) => [...prev, newMsg]);
       lastMsgTimestampRef.current = newMsg.timestamp;
       setReplyText("");
       setPendingFiles([]);
+      setReplyToMsg(null);
 
       // Update chat list: move this chat to top with the new last message
       setChats((prev) => {
@@ -393,6 +414,17 @@ export default function ManagerWhatsAppChat() {
     handleFileSelect(e.dataTransfer.files);
   };
 
+  // ── Resolve name from JID for display ──
+  const resolveName = (jid: string) => {
+    return jid.replace(/@s\.whatsapp\.net$/, "").replace(/@g\.us$/, "") || jid;
+  };
+
+  // ── Start reply on message click ──
+  const handleStartReply = (msg: ChatMessage) => {
+    setReplyToMsg(msg);
+    setTimeout(() => replyInputRef.current?.focus(), 100);
+  };
+
   // ── Filtered chats ──
   const filteredChats = chats.filter((c) => {
     if (!searchQuery) return true;
@@ -413,8 +445,13 @@ export default function ManagerWhatsAppChat() {
       msg.timestamp - prevMsg.timestamp > 300000; // 5 min gap
     const isPending = msg.id.startsWith("local-");
 
+    const handleQuotedClick = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      handleStartReply(msg);
+    };
+
     return (
-      <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"} mb-1`}>
+      <div key={msg.id} className={`flex ${isMe ? "justify-end" : "justify-start"} mb-1 group/msg`}>
         <div className={`max-w-[75%] ${isMe ? "ml-12" : "mr-12"}`}>
           {/* Local media preview for sent messages */}
           {isMe && msg.mediaUrl && msg.type === "image" && (
@@ -457,7 +494,26 @@ export default function ManagerWhatsAppChat() {
                 ? "bg-success/10 text-foreground rounded-tr-sm"
                 : "bg-card border border-border text-foreground rounded-tl-sm"
             } ${isPending ? "opacity-70" : ""}`}
+            onClick={handleQuotedClick}
           >
+            {/* Quoted message */}
+            {msg.quotedMessage && (
+              <div className="mb-1 px-2 py-1 rounded bg-primary/5 border-l-2 border-primary/30 cursor-pointer">
+                <p className="text-[10px] font-semibold text-primary">
+                  {msg.quotedMessage.participant
+                    ? resolveName(msg.quotedMessage.participant)
+                    : "Anda"}
+                </p>
+                <p className="text-[10px] text-muted-foreground truncate">
+                  {msg.quotedMessage.type !== "text" && (
+                    <span className="mr-1">
+                      {msg.quotedMessage.type === "image" ? "📷" : msg.quotedMessage.type === "video" ? "🎬" : msg.quotedMessage.type === "audio" ? "🎤" : "📎"}
+                    </span>
+                  )}
+                  {msg.quotedMessage.body || "Pesan"}
+                </p>
+              </div>
+            )}
             {/* Group sender name */}
             {!isMe && isGroupJid(msg.chatJid) && msg.from && (
               <p className="text-[10px] font-semibold text-primary mb-0.5">
@@ -818,6 +874,27 @@ export default function ManagerWhatsAppChat() {
 
               {/* Reply input */}
               <div className="px-4 py-3 border-t bg-card">
+                {/* Reply-to preview */}
+                {replyToMsg && (
+                  <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-md bg-primary/5 border-l-2 border-primary/40">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-semibold text-primary">
+                        Membalas {replyToMsg.isFromMe ? "diri sendiri" : (selectedChat?.name || "")}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {replyToMsg.type !== "text" && (
+                          <span className="mr-1">
+                            {replyToMsg.type === "image" ? "📷" : replyToMsg.type === "video" ? "🎬" : replyToMsg.type === "audio" ? "🎤" : "📎"}
+                          </span>
+                        )}
+                        {replyToMsg.body || "Pesan"}
+                      </p>
+                    </div>
+                    <button onClick={cancelReply} className="text-muted-foreground hover:text-foreground shrink-0">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
                 {/* Pending files preview */}
                 {pendingFiles.length > 0 && (
                   <div className="flex gap-2 mb-2 overflow-x-auto pb-1">

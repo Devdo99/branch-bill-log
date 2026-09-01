@@ -68,6 +68,28 @@ function cacheMessage(msg) {
     else if (m.buttonsResponseMessage) { body = m.buttonsResponseMessage.selectedDisplayText || ''; }
     else if (m.listResponseMessage) { body = m.listResponseMessage.singleSelectReply?.selectedRowId || ''; }
     else { body = JSON.stringify(m).slice(0, 200); }
+
+    // Extract quoted message (reply)
+    let quotedMessage = null;
+    const contextInfo = m?.extendedTextMessage?.contextInfo || m?.imageMessage?.contextInfo || m?.videoMessage?.contextInfo || m?.documentMessage?.contextInfo || m?.conversation?.contextInfo;
+    if (contextInfo?.quotedMessage) {
+      const qm = contextInfo.quotedMessage;
+      let qBody = '';
+      let qType = 'text';
+      if (qm.conversation) qBody = qm.conversation;
+      else if (qm.extendedTextMessage?.text) qBody = qm.extendedTextMessage.text;
+      else if (qm.imageMessage) { qType = 'image'; qBody = qm.imageMessage.caption || '[Gambar]'; }
+      else if (qm.videoMessage) { qType = 'video'; qBody = qm.videoMessage.caption || '[Video]'; }
+      else if (qm.documentMessage) { qType = 'document'; qBody = qm.documentMessage.fileName || '[Dokumen]'; }
+      else if (qm.audioMessage) { qType = 'audio'; qBody = '[Audio]'; }
+      else if (qm.stickerMessage) { qType = 'sticker'; qBody = '[Stiker]'; }
+      else qBody = '[Pesan]';
+      quotedMessage = {
+        body: qBody,
+        type: qType,
+        participant: contextInfo.participant || null,
+      };
+    }
   }
 
   const entry = {
@@ -82,6 +104,7 @@ function cacheMessage(msg) {
     caption,
     isFromMe,
     chatJid,
+    quotedMessage,
   };
 
   chatMessages.push(entry);
@@ -390,9 +413,26 @@ app.post('/api/send-message', async (req, res) => {
       }
     }
 
+    // Build reply context if quotedMsgId is provided
+    let quotedMsg = undefined;
+    if (req.body.quotedMsgId) {
+      // Try to find the quoted message in cache to build contextInfo
+      const cachedMsgs = messageCache.get(target) || [];
+      const qMsg = cachedMsgs.find(m => m.id === req.body.quotedMsgId);
+      if (qMsg) {
+        quotedMsg = {
+          key: { remoteJid: target, id: qMsg.id, fromMe: qMsg.isFromMe },
+          message: {}, // Baileys only needs the key for quoting
+        };
+      }
+    }
+    const contextInfo = quotedMsg ? { quotedMessage: quotedMsg.message, stanzaId: quotedMsg.key.id, participant: quotedMsg.key.fromMe ? undefined : quotedMsg.key.remoteJid } : undefined;
+
     if (mediaBuffers.length === 1) {
       const mime = guessImageMime(mediaBuffers[0]);
-      await sock.sendMessage(target, { image: mediaBuffers[0], mimetype: mime, caption: message });
+      const msgObj = { image: mediaBuffers[0], mimetype: mime, caption: message };
+      if (contextInfo) msgObj.contextInfo = contextInfo;
+      await sock.sendMessage(target, msgObj);
     } else if (mediaBuffers.length > 1) {
       try {
         // Album = beberapa gambar dalam satu pesan
@@ -412,7 +452,9 @@ app.post('/api/send-message', async (req, res) => {
         }
       }
     } else {
-      await sock.sendMessage(target, { text: message });
+      const msgObj = { text: message };
+      if (contextInfo) msgObj.contextInfo = contextInfo;
+      await sock.sendMessage(target, msgObj);
     }
 
     res.json({ success: true, message: 'Message sent successfully', mediaCount: mediaBuffers.length });
