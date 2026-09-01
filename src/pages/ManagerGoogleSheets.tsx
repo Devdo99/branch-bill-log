@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
@@ -14,92 +13,54 @@ import {
   Loader2,
   FileSpreadsheet,
   RefreshCw,
-  ExternalLink,
   Info,
   Zap,
-  Upload,
   Shield,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   loadGSheetsConfig,
   saveGSheetsConfig,
-  saveConfigToBackend,
   testGSheetsConnection,
-  getConfigFromBackend,
   type GSheetsConfig,
 } from "@/lib/gsheets";
 
 export default function ManagerGoogleSheets() {
   const [config, setConfig] = useState<GSheetsConfig>(() => loadGSheetsConfig());
-  const [spreadsheetId, setSpreadsheetId] = useState(config.spreadsheetId);
-  const [sheetName, setSheetName] = useState(config.sheetName || "Daftar Nota");
-  const [saJsonText, setSaJsonText] = useState(config.serviceAccountJson || "");
+  const [webhookUrl, setWebhookUrl] = useState(config.webhookUrl);
   const [testing, setTesting] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [backendConfigured, setBackendConfigured] = useState(false);
 
   useEffect(() => {
     setConfig(loadGSheetsConfig());
-    // Check if backend already has config
-    getConfigFromBackend().then((bc) => {
-      setBackendConfigured(bc.configured);
-      if (bc.configured && !spreadsheetId) {
-        setSpreadsheetId(bc.spreadsheetId);
-        setSheetName(bc.sheetName);
-      }
-    });
   }, []);
 
-  // Save config to both backend and localStorage
-  const handleSave = async () => {
-    if (!spreadsheetId.trim()) {
-      toast.error("Masukkan Spreadsheet ID");
+  // Save config
+  const handleSave = () => {
+    if (!webhookUrl.trim()) {
+      toast.error("Masukkan Webhook URL");
       return;
     }
-    if (!saJsonText.trim()) {
-      toast.error("Masukkan Service Account JSON");
-      return;
-    }
-    setSaving(true);
+    // Validate URL format
     try {
-      const result = await saveConfigToBackend(spreadsheetId.trim(), sheetName.trim(), saJsonText.trim());
-      if (!result.success) {
-        toast.error(result.message);
-        setSaving(false);
-        return;
-      }
-      const updated: GSheetsConfig = {
-        ...config,
-        spreadsheetId: spreadsheetId.trim(),
-        sheetName: sheetName.trim() || "Daftar Nota",
-        serviceAccountJson: saJsonText.trim(),
-        serviceAccountEmail: extractEmail(saJsonText),
-      };
-      saveGSheetsConfig(updated);
-      setConfig(updated);
-      setBackendConfigured(true);
-      toast.success("Pengaturan tersimpan!");
-    } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : "Gagal menyimpan");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const extractEmail = (json: string): string => {
-    try {
-      const obj = JSON.parse(json);
-      return obj.client_email || "";
+      new URL(webhookUrl.trim());
     } catch {
-      return "";
+      toast.error("URL tidak valid");
+      return;
     }
+
+    const updated: GSheetsConfig = {
+      ...config,
+      webhookUrl: webhookUrl.trim(),
+    };
+    saveGSheetsConfig(updated);
+    setConfig(updated);
+    toast.success("Pengaturan tersimpan!");
   };
 
   const handleToggle = (checked: boolean) => {
-    if (checked && (!config.spreadsheetId || !config.serviceAccountEmail)) {
-      toast.error("Simpan pengaturan terlebih dahulu");
+    if (checked && !config.webhookUrl) {
+      toast.error("Simpan Webhook URL terlebih dahulu");
       return;
     }
     const updated = { ...config, enabled: checked };
@@ -111,10 +72,7 @@ export default function ManagerGoogleSheets() {
   const handleTest = async () => {
     setTesting(true);
     setTestResult(null);
-    const result = await testGSheetsConnection(
-      spreadsheetId.trim() || undefined,
-      saJsonText.trim() || undefined
-    );
+    const result = await testGSheetsConnection(webhookUrl.trim() || undefined);
     setTestResult(result);
     setTesting(false);
     if (result.success) toast.success(result.message);
@@ -124,10 +82,7 @@ export default function ManagerGoogleSheets() {
   const handleReset = () => {
     const updated: GSheetsConfig = {
       enabled: false,
-      spreadsheetId: "",
-      sheetName: "Daftar Nota",
-      serviceAccountJson: "",
-      serviceAccountEmail: "",
+      webhookUrl: "",
       lastSyncAt: null,
       lastSyncStatus: null,
       lastSyncMessage: null,
@@ -135,11 +90,8 @@ export default function ManagerGoogleSheets() {
     };
     saveGSheetsConfig(updated);
     setConfig(updated);
-    setSpreadsheetId("");
-    setSheetName("Daftar Nota");
-    setSaJsonText("");
+    setWebhookUrl("");
     setTestResult(null);
-    setBackendConfigured(false);
     toast.success("Pengaturan direset");
   };
 
@@ -151,10 +103,10 @@ export default function ManagerGoogleSheets() {
           <div className="flex items-start gap-3">
             <Info className="h-5 w-5 text-primary shrink-0 mt-0.5" />
             <div>
-              <h3 className="font-semibold text-primary">Google Sheets — Direct API</h3>
+              <h3 className="font-semibold text-primary">Google Sheets — Apps Script Webhook</h3>
               <p className="text-sm text-muted-foreground mt-1">
-                Data nota dikirim langsung ke Google Sheets menggunakan Service Account.
-                <strong> Tidak perlu Apps Script.</strong> Cukup buat Service Account, bagikan sheet-nya, dan paste kredensialnya.
+                Data nota dikirim langsung ke Google Sheets melalui Apps Script yang di-deploy sebagai web app.
+                <strong> Tidak perlu Service Account Google.</strong> Cukup deploy Apps Script, copy URL-nya, dan paste di bawah.
               </p>
             </div>
           </div>
@@ -168,7 +120,7 @@ export default function ManagerGoogleSheets() {
               Panduan Setup (3 Langkah)
             </CardTitle>
             <CardDescription>
-              Ikuti langkah berikut — tidak perlu Apps Script
+              Ikuti langkah berikut — tidak perlu Google Cloud atau Service Account
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -177,11 +129,10 @@ export default function ManagerGoogleSheets() {
               <div className="flex gap-3">
                 <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">1</div>
                 <div>
-                  <h4 className="font-semibold text-sm">Buat Google Cloud Service Account</h4>
+                  <h4 className="font-semibold text-sm">Buat Google Sheet Baru</h4>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Buka <a href="https://console.cloud.google.com/iam-admin/serviceaccounts" target="_blank" rel="noopener" className="text-primary underline">Google Cloud Console</a>,
-                    buat Service Account baru. Aktifkan <b>Google Sheets API</b> di APIs & Services.
-                    Buat <b>JSON key</b> dan download file-nya.
+                    Buka <a href="https://sheets.google.com" target="_blank" rel="noopener" className="text-primary underline">Google Sheets</a>,
+                    buat spreadsheet baru. Nama sheet tidak penting — akan dibuat otomatis oleh script.
                   </p>
                 </div>
               </div>
@@ -190,10 +141,11 @@ export default function ManagerGoogleSheets() {
               <div className="flex gap-3">
                 <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">2</div>
                 <div>
-                  <h4 className="font-semibold text-sm">Bagikan Google Sheet ke Service Account</h4>
+                  <h4 className="font-semibold text-sm">Deploy Google Apps Script</h4>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Buka Google Sheet Anda, klik <b>Share</b>, lalu masukkan email Service Account
-                    (terlihat di file JSON, field <code>client_email</code>). Berikan akses <b>Editor</b>.
+                    Buka spreadsheet → <b>Extensions</b> → <b>Apps Script</b>. Hapus kode default, lalu tempel kode dari file{" "}
+                    <code className="bg-muted px-1 rounded">scripts/gs-sync.gs</code>.
+                    Klik <b>Deploy</b> → <b>New deployment</b> → pilih <b>Web app</b> → Execute as <b>Me</b> → Who has access <b>Anyone</b> → Deploy.
                   </p>
                 </div>
               </div>
@@ -202,11 +154,10 @@ export default function ManagerGoogleSheets() {
               <div className="flex gap-3">
                 <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">3</div>
                 <div>
-                  <h4 className="font-semibold text-sm">Isi Konfigurasi di Bawah</h4>
+                  <h4 className="font-semibold text-sm">Copy URL & Paste di Bawah</h4>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Copy <b>Spreadsheet ID</b> dari URL sheet
-                    (<code>https://docs.google.com/spreadsheets/d/<b>SPREADSHEET_ID</b>/edit</code>),
-                    lalu paste JSON key Service Account di kolom yang tersedia.
+                    Setelah deploy, salin URL web app (format: <code className="bg-muted px-1 rounded">https://script.google.com/macros/s/xxx/exec</code>),
+                    lalu paste di kolom Webhook URL di bawah ini.
                   </p>
                 </div>
               </div>
@@ -222,7 +173,7 @@ export default function ManagerGoogleSheets() {
               Konfigurasi
             </CardTitle>
             <CardDescription>
-              Masukkan Spreadsheet ID dan Service Account JSON
+              Masukkan Webhook URL dari Apps Script
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -237,62 +188,32 @@ export default function ManagerGoogleSheets() {
               <Switch checked={config.enabled} onCheckedChange={handleToggle} />
             </div>
 
-            {/* Spreadsheet ID */}
-            <div className="space-y-2">
-              <Label>Spreadsheet ID</Label>
-              <Input
-                value={spreadsheetId}
-                onChange={(e) => setSpreadsheetId(e.target.value)}
-                placeholder="1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgVE2upms"
-                className="font-mono text-xs"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                ID dari URL: docs.google.com/spreadsheets/d/<b className="text-foreground">INI_IDNYA</b>/edit
-              </p>
-            </div>
-
-            {/* Sheet Name */}
-            <div className="space-y-2">
-              <Label>Nama Sheet (Tab)</Label>
-              <Input
-                value={sheetName}
-                onChange={(e) => setSheetName(e.target.value)}
-                placeholder="Daftar Nota"
-                className="text-xs"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Nama tab di spreadsheet. Akan dibuat otomatis jika belum ada.
-              </p>
-            </div>
-
-            {/* Service Account JSON */}
+            {/* Webhook URL */}
             <div className="space-y-2">
               <Label className="flex items-center gap-1.5">
                 <Shield className="h-3.5 w-3.5" />
-                Service Account JSON
+                Webhook URL (Apps Script)
               </Label>
-              <Textarea
-                value={saJsonText}
-                onChange={(e) => setSaJsonText(e.target.value)}
-                placeholder='{"type":"service_account","project_id":"...","private_key":"...","client_email":"...@...iam.gserviceaccount.com",...}'
-                className="font-mono text-[10px] min-h-[120px]"
+              <Input
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                placeholder="https://script.google.com/macros/s/AKfycbx.../exec"
+                className="font-mono text-xs"
               />
               <p className="text-[11px] text-muted-foreground">
-                Paste isi file JSON yang didownload dari Google Cloud Console.
-                <span className="text-warning ml-1">⚠ Disimpan di server backend (bukan browser).</span>
+                URL deployment dari Google Apps Script (format: <code>https://script.google.com/macros/s/.../exec</code>)
               </p>
-              {config.serviceAccountEmail && (
+              {config.webhookUrl && (
                 <p className="text-[11px] text-success flex items-center gap-1">
                   <CheckCircle2 className="h-3 w-3" />
-                  Service Account: {config.serviceAccountEmail}
+                  Webhook URL tersimpan
                 </p>
               )}
             </div>
 
             {/* Action Buttons */}
             <div className="flex flex-wrap gap-2">
-              <Button onClick={handleSave} size="sm" disabled={saving}>
-                {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : null}
+              <Button onClick={handleSave} size="sm">
                 Simpan Pengaturan
               </Button>
               <Button onClick={handleTest} variant="outline" size="sm" disabled={testing}>
@@ -366,7 +287,7 @@ export default function ManagerGoogleSheets() {
             <ul className="space-y-2 text-sm text-muted-foreground">
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
-                <span>Tidak perlu Apps Script — data langsung dikirim via Google Sheets API</span>
+                <span>Tidak perlu Google Cloud Console atau Service Account</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
@@ -374,7 +295,7 @@ export default function ManagerGoogleSheets() {
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
-                <span>Anti duplikat — NotaKu memeriksa ID nota sebelum menulis</span>
+                <span>Anti duplikat — script memeriksa ID nota sebelum menulis</span>
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="h-4 w-4 text-success shrink-0 mt-0.5" />
@@ -382,7 +303,7 @@ export default function ManagerGoogleSheets() {
               </li>
               <li className="flex items-start gap-2">
                 <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                <span>Service Account JSON tersimpan di server backend (bukan di browser)</span>
+                <span>URL webhook tersimpan di browser (localStorage)</span>
               </li>
             </ul>
           </CardContent>
