@@ -19,6 +19,8 @@ import ManagerProfitLoss from "./pages/ManagerProfitLoss.tsx";
 import ManagerPayments from "./pages/ManagerPayments.tsx";
 import ManagerAdmins from "./pages/ManagerAdmins.tsx";
 import ManagerWhatsApp from "./pages/ManagerWhatsApp.tsx";
+import ManagerBackup from "./pages/ManagerBackup.tsx";
+import ManagerGoogleSheets from "./pages/ManagerGoogleSheets.tsx";
 import KasirDashboard from "./pages/KasirDashboard.tsx";
 import KasirInputNota from "./pages/KasirInputNota.tsx";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -51,6 +53,8 @@ const App = () => (
               <Route path="/manager/cashiers" element={<RequireAuth role={["manager", "admin"]} requireBranch><ManagerCashiers /></RequireAuth>} />
               <Route path="/manager/admins" element={<RequireAuth role="manager" requireBranch><ManagerAdmins /></RequireAuth>} />
               <Route path="/manager/whatsapp" element={<RequireAuth role="manager" requireBranch><ManagerWhatsApp /></RequireAuth>} />
+              <Route path="/manager/backup" element={<RequireAuth role="manager" requireBranch><ManagerBackup /></RequireAuth>} />
+              <Route path="/manager/google-sheets" element={<RequireAuth role="manager" requireBranch><ManagerGoogleSheets /></RequireAuth>} />
               <Route path="/kasir" element={<RequireAuth role="kasir"><KasirDashboard /></RequireAuth>} />
               <Route path="/kasir/input" element={<RequireAuth role="kasir"><KasirInputNota /></RequireAuth>} />
               <Route path="*" element={<NotFound />} />

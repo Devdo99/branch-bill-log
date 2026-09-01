@@ -3,8 +3,9 @@ import AppShell from "@/components/AppShell";
 import { useBranch } from "@/contexts/BranchContext";
 import { supabase } from "@/integrations/supabase/client";
 import { formatRupiah, formatRupiahCompact } from "@/lib/format";
+import { loadGSheetsConfig, syncToGSheets, type GSheetsConfig } from "@/lib/gsheets";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line, CartesianGrid, ComposedChart, Area } from "recharts";
-import { TrendingUp, AlertCircle, AlertTriangle, CheckCircle2, Receipt, Package, Truck, Building2, Crown, Calendar, Wallet, BarChart3, LineChart as LineIcon, Coins, Percent, ArrowUpRight, ArrowDownRight, Scale, FilePlus2, ListChecks, RefreshCw } from "lucide-react";
+import { TrendingUp, AlertCircle, AlertTriangle, CheckCircle2, Receipt, Package, Truck, Building2, Crown, Calendar, Wallet, BarChart3, LineChart as LineIcon, Coins, Percent, ArrowUpRight, ArrowDownRight, Scale, FilePlus2, ListChecks, RefreshCw, FileSpreadsheet, Loader2 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { LoadingPage } from "@/components/LoadingBlock";
 import { EmptyState } from "@/components/EmptyState";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 interface Inv { id: string; supplier: string; item_name: string; qty: number; price: number; total: number; status: "BELUM" | "SUDAH"; invoice_date: string; branch_id: string }
 interface Rev { id: string; branch_id: string; revenue_date: string; amount: number }
@@ -46,6 +48,51 @@ export default function ManagerDashboard() {
   }, [periodMode, year, month, quarter, semester]);
 
   const [loadError, setLoadError] = useState(false);
+  const [gsheetsConfig, setGSheetsConfig] = useState<GSheetsConfig>(() => loadGSheetsConfig());
+  const [syncingGSheets, setSyncingGSheets] = useState(false);
+
+  useEffect(() => { setGSheetsConfig(loadGSheetsConfig()); }, []);
+
+  const handleSyncGSheets = useCallback(async () => {
+    if (!gsheetsConfig.enabled || !gsheetsConfig.webhookUrl) {
+      toast.error("Google Sheets belum dikonfigurasi");
+      return;
+    }
+    setSyncingGSheets(true);
+    try {
+      // Fetch all invoices with branch names
+      const { data: allInvs } = await supabase
+        .from("invoices")
+        .select("id, branch_id, invoice_date, supplier, item_name, qty, price, total, status, created_at")
+        .order("created_at", { ascending: false });
+
+      const { data: allBranches } = await supabase.from("branches").select("id, name");
+      const branchMap = new Map((allBranches ?? []).map((b: any) => [b.id, b.name]));
+
+      const rows = (allInvs ?? []).map((inv: any) => ({
+        id: inv.id,
+        branch_name: branchMap.get(inv.branch_id) ?? "-",
+        invoice_date: inv.invoice_date,
+        supplier: inv.supplier,
+        item_name: inv.item_name,
+        qty: inv.qty,
+        price: inv.price,
+        total: inv.total,
+        status: inv.status,
+        created_by_name: "",
+        created_at: inv.created_at,
+      }));
+
+      const result = await syncToGSheets(rows);
+      if (result.success) toast.success(result.message);
+      else toast.error(result.message);
+      setGSheetsConfig(loadGSheetsConfig());
+    } catch (err) {
+      toast.error("Gagal sync ke Google Sheets");
+    } finally {
+      setSyncingGSheets(false);
+    }
+  }, [gsheetsConfig]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -368,6 +415,32 @@ export default function ManagerDashboard() {
           <div className="text-xs text-muted-foreground">Periode aktif: <b>{from || "?"}</b> s/d <b>{to || "?"}</b></div>
         )}
       </div>
+
+      {/* Google Sheets Sync Status */}
+      {gsheetsConfig.enabled && gsheetsConfig.webhookUrl && (
+        <div className="mb-4 flex items-center justify-between rounded-lg border border-success/30 bg-success/5 p-3">
+          <div className="flex items-center gap-2 text-sm">
+            <FileSpreadsheet className="h-4 w-4 text-success" />
+            <span className="text-muted-foreground">Google Sheets:</span>
+            <span className="font-medium text-success">Aktif</span>
+            {gsheetsConfig.lastSyncAt && (
+              <span className="text-xs text-muted-foreground">
+                — terakhir sync {new Date(gsheetsConfig.lastSyncAt).toLocaleString("id-ID")} ({gsheetsConfig.totalSynced} data)
+              </span>
+            )}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleSyncGSheets}
+            disabled={syncingGSheets}
+            className="h-8 text-xs"
+          >
+            {syncingGSheets ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5 mr-1" />}
+            Sync Semua
+          </Button>
+        </div>
+      )}
 
       {/* Peringatan nota belum dibayar / lewat jatuh tempo (semua periode, tidak terpengaruh filter) */}
       {branchUnpaid.length > 0 && (

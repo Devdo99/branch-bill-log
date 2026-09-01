@@ -31,6 +31,8 @@ import {
 } from "@/components/ui/collapsible";
 import {
   Building2,
+  Download,
+  FileSpreadsheet,
   FileText,
   LayoutDashboard,
   LineChart,
@@ -210,8 +212,10 @@ export default function AppShell({ children, title }: Props) {
             { to: "/manager/cashiers", label: "Data Kasir", perm: "manage_cashiers" as const },
             { to: "/manager/admins", label: "Kelola Admin", managerOnly: true },
             { to: "/manager/branches", label: "Kelola Cabang", managerOnly: true },
-            { to: "/manager/whatsapp", label: "WhatsApp Gateway", managerOnly: true },
-          ]
+          { to: "/manager/whatsapp", label: "WhatsApp Gateway", managerOnly: true },
+          { to: "/manager/backup", label: "Backup & Restore", managerOnly: true },
+          { to: "/manager/google-sheets", label: "Google Sheets", managerOnly: true },
+        ]
         }
       ]
     }

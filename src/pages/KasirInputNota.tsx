@@ -109,7 +109,7 @@ export default function KasirInputNota() {
         const { error: upErr } = await supabase.storage.from("nota-photos").upload(photo_path, photo, { upsert: false });
         if (upErr) throw upErr;
       }
-      const { error } = await supabase.from("invoices").insert({
+      const { data: insertedInvoice, error } = await supabase.from("invoices").insert({
         branch_id: cashierBranch.id,
         invoice_date: parsed.data.invoice_date,
         supplier: parsed.data.supplier,
@@ -119,8 +119,30 @@ export default function KasirInputNota() {
         total: parsed.data.qty * parsed.data.price,
         photo_path,
         created_by: user.id,
-      });
+      }).select().maybeSingle();
       if (error) throw error;
+
+      // Auto-sync to Google Sheets (fire and forget)
+      try {
+        const { loadGSheetsConfig, syncToGSheets } = await import("@/lib/gsheets");
+        const gsConfig = loadGSheetsConfig();
+        if (gsConfig.enabled && gsConfig.webhookUrl && insertedInvoice) {
+          syncToGSheets([{
+            id: insertedInvoice.id,
+            branch_name: cashierBranch.name,
+            invoice_date: insertedInvoice.invoice_date,
+            supplier: insertedInvoice.supplier,
+            item_name: insertedInvoice.item_name,
+            qty: insertedInvoice.qty,
+            price: insertedInvoice.price,
+            total: insertedInvoice.total,
+            status: insertedInvoice.status,
+            created_by_name: "",
+            created_at: insertedInvoice.created_at,
+          }]).catch(() => {}); // silent fail for background sync
+        }
+      } catch { /* ignore gsheets errors */ }
+
       toast.success("Nota disimpan");
       nav("/kasir");
     } catch (e: any) { toast.error(e.message); }

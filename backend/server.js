@@ -20,6 +20,90 @@ let sock = null;
 let connectionStatus = 'disconnected'; // 'disconnected' | 'connecting' | 'connected'
 let latestQr = null;
 
+// ── Message Cache (in-memory) ──────────────────────────────────────────
+// Menyimpan pesan real-time dari Baileys agar bisa dibaca dari frontend.
+// Struktur: Map<chatJid, Array<{ id, from, to, body, timestamp, type, mediaUrl, mediaType, caption, isFromMe }>>
+const messageCache = new Map();
+const MAX_MESSAGES_PER_CHAT = 200;
+const MAX_CHATS = 200;
+
+function cacheMessage(msg) {
+  if (!msg || !msg.key || !msg.key.remoteJid) return;
+  const jid = msg.key.remoteJid;
+  if (jid === 'status@broadcast') return;
+
+  const chatJid = jid;
+  if (!messageCache.has(chatJid)) {
+    messageCache.set(chatJid, []);
+  }
+  const chatMessages = messageCache.get(chatJid);
+
+  const isFromMe = !!msg.key.fromMe;
+  const msgId = msg.key.id || '';
+  const timestamp = msg.messageTimestamp || Date.now() / 1000;
+
+  // Extract content
+  let body = '';
+  let type = 'text';
+  let mediaUrl = null;
+  let mediaType = null;
+  let caption = null;
+  const m = msg.message;
+
+  if (m) {
+    if (m.conversation) { body = m.conversation; }
+    else if (m.extendedTextMessage?.text) { body = m.extendedTextMessage.text; }
+    else if (m.imageMessage) { type = 'image'; body = m.imageMessage.caption || ''; caption = m.imageMessage.caption || ''; mediaType = 'image'; }
+    else if (m.videoMessage) { type = 'video'; body = m.videoMessage.caption || ''; caption = m.videoMessage.caption || ''; mediaType = 'video'; }
+    else if (m.documentMessage) { type = 'document'; body = m.documentMessage.fileName || 'document'; mediaType = 'document'; }
+    else if (m.audioMessage) { type = 'audio'; mediaType = 'audio'; }
+    else if (m.stickerMessage) { type = 'sticker'; mediaType = 'sticker'; }
+    else if (m.contactMessage) { body = m.contactMessage.displayName || 'contact'; type = 'contact'; }
+    else if (m.locationMessage) { body = 'Location'; type = 'location'; }
+    else if (m.protocolMessage) { type = 'protocol'; body = 'System message'; }
+    else if (m.buttonsResponseMessage) { body = m.buttonsResponseMessage.selectedDisplayText || ''; }
+    else if (m.listResponseMessage) { body = m.listResponseMessage.singleSelectReply?.selectedRowId || ''; }
+    else { body = JSON.stringify(m).slice(0, 200); }
+  }
+
+  const entry = {
+    id: msgId,
+    from: isFromMe ? (msg.key.participant || msg.key.remoteJid) : msg.key.remoteJid,
+    to: isFromMe ? msg.key.remoteJid : (msg.key.participant || msg.key.remoteJid),
+    body,
+    timestamp: typeof timestamp === 'number' && timestamp < 1e12 ? timestamp * 1000 : timestamp,
+    type,
+    mediaUrl: null, // will be resolved on demand
+    mediaType,
+    caption,
+    isFromMe,
+    chatJid,
+  };
+
+  chatMessages.push(entry);
+  if (chatMessages.length > MAX_MESSAGES_PER_CHAT) {
+    chatMessages.splice(0, chatMessages.length - MAX_MESSAGES_PER_CHAT);
+  }
+}
+
+function getChatList() {
+  const chats = [];
+  for (const [jid, messages] of messageCache.entries()) {
+    const lastMsg = messages[messages.length - 1];
+    if (!lastMsg) continue;
+    const unread = messages.filter(m => !m.isFromMe && !m.read).length;
+    chats.push({
+      jid,
+      name: jid.replace(/@s\.whatsapp\.net$/, '').replace(/@g\.us$/, ' (group)'),
+      lastMessage: lastMsg,
+      unreadCount: unread,
+      messageCount: messages.length,
+    });
+  }
+  chats.sort((a, b) => (b.lastMessage?.timestamp || 0) - (a.lastMessage?.timestamp || 0));
+  return chats.slice(0, MAX_CHATS);
+}
+
 async function connectToWhatsApp() {
   try {
     connectionStatus = 'connecting';
@@ -34,6 +118,31 @@ async function connectToWhatsApp() {
     });
 
     sock.ev.on('creds.update', saveCreds);
+
+    // ── Cache incoming & outgoing messages ────────────────────────────────
+    sock.ev.on('messages.upsert', (upsert) => {
+      if (upsert.type !== 'notify') return;
+      for (const msg of upsert.messages) {
+        cacheMessage(msg);
+      }
+    });
+
+    // ── Resolve push names (contact names) ────────────────────────────────
+    sock.ev.on('contacts.upsert', (contacts) => {
+      for (const c of contacts) {
+        const jid = c.id;
+        if (!jid) continue;
+        const pushName = c.name || c.notify || '';
+        if (!pushName) continue;
+        // Update chat name in cache
+        const chatMsgs = messageCache.get(jid);
+        if (chatMsgs) {
+          for (const m of chatMsgs) {
+            if (m.name === undefined) m.name = pushName;
+          }
+        }
+      }
+    });
 
     sock.ev.on('connection.update', async (update) => {
       const { connection, lastDisconnect, qr } = update;
@@ -261,6 +370,156 @@ app.post('/api/connect', async (req, res) => {
 
   connectToWhatsApp();
   res.json({ success: true, message: 'Connecting initialized' });
+});
+
+// ── GET /api/chats — List all cached chats ────────────────────────────
+app.get('/api/chats', (req, res) => {
+  if (connectionStatus !== 'connected' || !sock) {
+    return res.status(400).json({ error: 'WhatsApp Gateway is not connected' });
+  }
+  try {
+    const chats = getChatList();
+    res.json({ chats });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/messages/:jid — Get messages for a specific chat ──────────
+app.get('/api/messages/:jid', (req, res) => {
+  if (connectionStatus !== 'connected' || !sock) {
+    return res.status(400).json({ error: 'WhatsApp Gateway is not connected' });
+  }
+  try {
+    const jid = decodeURIComponent(req.params.jid);
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    const before = req.query.before; // timestamp filter
+    const messages = messageCache.get(jid) || [];
+    let filtered = messages;
+    if (before) {
+      const beforeTs = parseInt(before);
+      filtered = messages.filter(m => m.timestamp < beforeTs);
+    }
+    const result = filtered.slice(-limit);
+    res.json({ messages: result, total: messages.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/media/:jid/:msgId — Download media from a message ────────
+app.get('/api/media/:jid/:msgId', async (req, res) => {
+  if (connectionStatus !== 'connected' || !sock) {
+    return res.status(400).json({ error: 'WhatsApp Gateway is not connected' });
+  }
+  try {
+    const jid = decodeURIComponent(req.params.jid);
+    const msgId = req.params.msgId;
+    const messages = messageCache.get(jid) || [];
+    const msg = messages.find(m => m.id === msgId);
+    if (!msg) return res.status(404).json({ error: 'Message not found in cache' });
+
+    // Re-fetch the message from Baileys to get media
+    const key = { remoteJid: jid, id: msgId, fromMe: msg.isFromMe };
+    const retrieved = await sock.loadMessage(jid, msgId);
+    if (!retrieved || !retrieved.message) {
+      return res.status(404).json({ error: 'Message not found on server' });
+    }
+
+    const m = retrieved.message;
+    let mediaMsg = null;
+    if (m.imageMessage) mediaMsg = m.imageMessage;
+    else if (m.videoMessage) mediaMsg = m.videoMessage;
+    else if (m.documentMessage) mediaMsg = m.documentMessage;
+    else if (m.audioMessage) mediaMsg = m.audioMessage;
+    else if (m.stickerMessage) mediaMsg = m.stickerMessage;
+
+    if (!mediaMsg || !mediaMsg.mimetype) {
+      return res.status(400).json({ error: 'No media in this message' });
+    }
+
+    const stream = await sock.downloadMediaMessage(retrieved, 'buffer', {});
+    if (!stream) return res.status(500).json({ error: 'Failed to download media' });
+
+    res.set('Content-Type', mediaMsg.mimetype);
+    if (mediaMsg.fileName) {
+      res.set('Content-Disposition', `inline; filename="${mediaMsg.fileName}"`);
+    }
+    res.send(stream);
+  } catch (err) {
+    console.error('Error downloading media:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/contacts — Search contacts ────────────────────────────────
+app.get('/api/contacts', (req, res) => {
+  if (connectionStatus !== 'connected' || !sock) {
+    return res.status(400).json({ error: 'WhatsApp Gateway is not connected' });
+  }
+  try {
+    const q = (req.query.q || '').toLowerCase();
+    const chats = getChatList();
+    let filtered = chats;
+    if (q) {
+      filtered = chats.filter(c =>
+        c.name.toLowerCase().includes(q) || c.jid.toLowerCase().includes(q)
+      );
+    }
+    res.json({ contacts: filtered.map(c => ({ jid: c.jid, name: c.name, lastMessage: c.lastMessage })) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/messages — Global search across all chats ─────────────────
+app.get('/api/messages', (req, res) => {
+  if (connectionStatus !== 'connected' || !sock) {
+    return res.status(400).json({ error: 'WhatsApp Gateway is not connected' });
+  }
+  try {
+    const q = (req.query.q || '').toLowerCase();
+    const typeFilter = req.query.type; // 'image', 'document', etc.
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    let allMessages = [];
+    for (const [jid, msgs] of messageCache.entries()) {
+      for (const m of msgs) {
+        allMessages.push({ ...m, chatJid: jid });
+      }
+    }
+    if (q) {
+      allMessages = allMessages.filter(m => (m.body || '').toLowerCase().includes(q));
+    }
+    if (typeFilter) {
+      allMessages = allMessages.filter(m => m.type === typeFilter);
+    }
+    allMessages.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    res.json({ messages: allMessages.slice(0, limit), total: allMessages.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/messages/images — Get all image messages ──────────────────
+app.get('/api/messages/images', (req, res) => {
+  if (connectionStatus !== 'connected' || !sock) {
+    return res.status(400).json({ error: 'WhatsApp Gateway is not connected' });
+  }
+  try {
+    const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+    let allImages = [];
+    for (const [jid, msgs] of messageCache.entries()) {
+      for (const m of msgs) {
+        if (m.type === 'image') {
+          allImages.push({ ...m, chatJid: jid });
+        }
+      }
+    }
+    allImages.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    res.json({ images: allImages.slice(0, limit), total: allImages.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Start Express and connect automatically
