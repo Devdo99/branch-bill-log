@@ -8,7 +8,7 @@
     "start": "node server.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^7.0.0-rc14",
+    "@whiskeysockets/baileys": "6.7.18",
     "cors": "^2.8.5",
     "express": "^4.21.0",
     "googleapis": "^178.0.0",
