@@ -63,9 +63,14 @@ export async function testGSheetsConnection(
   }
 
   try {
+    // PENTING: jangan set header "Content-Type: application/json".
+    // Header custom memicu CORS preflight (OPTIONS) yang tidak didukung
+    // Apps Script sehingga fetch gagal dengan "Failed to fetch".
+    // Tanpa header custom, request dianggap "simple request" (no preflight)
+    // dan Apps Script tetap menerima JSON lewat e.postData.contents.
     const res = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      redirect: "follow",
       body: JSON.stringify({ action: "test_connection" }),
     });
     const data = await res.json();
@@ -74,9 +79,17 @@ export async function testGSheetsConnection(
     }
     return { success: false, message: data.message || "Test gagal" };
   } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    if (msg === "Failed to fetch") {
+      return {
+        success: false,
+        message:
+          "Failed to fetch — periksa: (1) URL harus diakhiri /exec, (2) Deployment access harus \"Anyone\", (3) Setelah mengubah kode Apps Script, buat deployment versi baru",
+      };
+    }
     return {
       success: false,
-      message: `Koneksi gagal: ${err instanceof Error ? err.message : "Unknown error"}`,
+      message: `Koneksi gagal: ${msg}`,
     };
   }
 }
@@ -92,9 +105,11 @@ export async function syncToGSheets(rows: InvoiceRow[]): Promise<{ success: bool
   }
 
   try {
+    // Sama seperti testGSheetsConnection: tanpa header Content-Type custom
+    // agar tidak memicu CORS preflight.
     const res = await fetch(config.webhookUrl, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      redirect: "follow",
       body: JSON.stringify({ action: "sync_invoices", data: rows }),
     });
     const data = await res.json();
@@ -122,9 +137,14 @@ export async function syncToGSheets(rows: InvoiceRow[]): Promise<{ success: bool
     };
     saveGSheetsConfig(updatedConfig);
 
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    const hint =
+      msg === "Failed to fetch"
+        ? " — periksa URL /exec, access \"Anyone\", dan deployment versi terbaru"
+        : "";
     return {
       success: false,
-      message: `Gagal sync: ${err instanceof Error ? err.message : "Unknown error"}`,
+      message: `Gagal sync: ${msg}${hint}`,
     };
   }
 }
