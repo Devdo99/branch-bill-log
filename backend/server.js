@@ -188,10 +188,27 @@ async function connectToWhatsApp() {
 
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_SESSION_DIR);
 
+    // Selalu pakai versi protokol WhatsApp Web terbaru. Versi yang basi adalah
+    // penyebab utama pesan tampil "Menunggu pesan ini" di HP (gagal dekripsi).
+    let waVersion;
+    try {
+      const { version } = await require('@whiskeysockets/baileys').fetchLatestBaileysVersion();
+      waVersion = version;
+      console.log('Using WhatsApp Web version:', version.join('.'));
+    } catch (e) {
+      console.warn('Gagal ambil versi WA terbaru, pakai default:', e.message);
+    }
+
     sock = makeWASocket({
       auth: state,
       printQRInTerminal: false,
       logger: pino({ level: 'error' }),
+      ...(waVersion ? { version: waVersion } : {}),
+      browser: Browsers.macOS('Desktop'),
+      // Kirim salinan pesan ke device lain (HP) supaya bisa didekripsi
+      syncFullHistory: true,
+      markOnlineOnConnect: false,
+      generateHighQualityLinkPreview: false,
     });
 
     sock.ev.on('creds.update', saveCreds);
