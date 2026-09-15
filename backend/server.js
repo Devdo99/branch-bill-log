@@ -201,12 +201,15 @@ async function connectToWhatsApp() {
 
     sock = makeWASocket({
       auth: state,
-      printQRInTerminal: false,
       logger: pino({ level: 'error' }),
       ...(waVersion ? { version: waVersion } : {}),
-      browser: Browsers.macOS('Desktop'),
+      // "appropriate" memilih identitas browser yang sesuai protokol WA terbaru.
+      // Identitas lama (macOS Desktop di Baileys 6.x) bisa menyebabkan HP utama
+      // gagal dekripsi pesan dari perangkat tertaut ("Menunggu pesan ini").
+      browser: Browsers.appropriate('Desktop'),
       // Kirim salinan pesan ke device lain (HP) supaya bisa didekripsi
       syncFullHistory: true,
+      // Jangan tampil "online" dari gateway agar HP utama tetap proses pesan normal
       markOnlineOnConnect: false,
       generateHighQualityLinkPreview: false,
     });
