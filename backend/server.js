@@ -5,7 +5,7 @@ const QRCode = require('qrcode');
 const qrcodeTerminal = require('qrcode-terminal');
 const fs = require('fs');
 const path = require('path');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
 const { google } = require('googleapis');
 
@@ -32,10 +32,10 @@ function clearReconnectTimer() {
   }
 }
 
-function scheduleReconnect(reason) {
+function scheduleReconnect(reason, delayOverrideMs) {
   if (reconnectTimer || connectPromise) return;
   reconnectAttempts += 1;
-  const delayMs = Math.min(30000, 3000 * reconnectAttempts);
+  const delayMs = delayOverrideMs ?? Math.min(30000, 3000 * reconnectAttempts);
   console.log(`Reconnect dijadwalkan dalam ${Math.round(delayMs / 1000)} detik (${reason}).`);
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
@@ -214,15 +214,26 @@ async function connectToWhatsApp() {
 
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_SESSION_DIR);
     const generation = ++connectionGeneration;
+    // Selalu pakai versi protokol WA Web terbaru agar handshake tidak ditolak (kode 428).
+    let waVersion;
+    try {
+      ({ version: waVersion } = await fetchLatestBaileysVersion());
+    } catch (e) {
+      console.warn('Gagal mengambil versi WA Web terbaru, memakai versi bawaan Baileys:', e.message);
+    }
+    if (waVersion) console.log('Menggunakan versi protokol WA Web:', waVersion.join('.'));
     const currentSock = makeWASocket({
+      version: waVersion,
       auth: state,
       logger: pino({ level: 'error' }),
-      // Biarkan Baileys menggunakan versi protokol yang diuji bersama paketnya.
-      // Memaksa versi terbaru dari server WhatsApp dapat memutus koneksi saat handshake.
-      browser: Browsers.appropriate('Desktop'),
-      syncFullHistory: true,
+      browser: Browsers.macOS('Desktop'),
+      // syncFullHistory: true memicu history sync masif yang sering membuat server
+      // memutus stream (428). Sync normal tetap berjalan via messaging-history.set.
+      syncFullHistory: false,
       markOnlineOnConnect: false,
       generateHighQualityLinkPreview: false,
+      connectTimeoutMs: 60000,
+      keepAliveIntervalMs: 30000,
     });
     sock = currentSock;
 
@@ -379,7 +390,10 @@ async function connectToWhatsApp() {
 
         if (shouldReconnect) {
           connectionStatus = 'connecting';
-          scheduleReconnect(error?.message || 'connection closed');
+          // 515 (restartRequired) = server minta restart segera dengan session yang sama,
+          // jangan tunggu backoff panjang agar sesi tidak menggantung.
+          const fastReconnect = statusCode === DisconnectReason.restartRequired;
+          scheduleReconnect(error?.message || 'connection closed', fastReconnect ? 2000 : undefined);
         } else {
           connectionStatus = 'disconnected';
           latestQr = null;
