@@ -20,6 +20,28 @@ const AUTH_SESSION_DIR = path.join(__dirname, 'auth_session');
 let sock = null;
 let connectionStatus = 'disconnected'; // 'disconnected' | 'connecting' | 'connected'
 let latestQr = null;
+let connectionGeneration = 0;
+let connectPromise = null;
+let reconnectTimer = null;
+let reconnectAttempts = 0;
+
+function clearReconnectTimer() {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer);
+    reconnectTimer = null;
+  }
+}
+
+function scheduleReconnect(reason) {
+  if (reconnectTimer || connectPromise) return;
+  reconnectAttempts += 1;
+  const delayMs = Math.min(30000, 3000 * reconnectAttempts);
+  console.log(`Reconnect dijadwalkan dalam ${Math.round(delayMs / 1000)} detik (${reason}).`);
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connectToWhatsApp();
+  }, delayMs);
+}
 
 // In-memory stores (populated from Baileys events)
 const chatStore = new Map(); // chatId -> Chat object
@@ -182,42 +204,32 @@ function getChatList() {
 }
 
 async function connectToWhatsApp() {
-  try {
+  if (connectPromise) return connectPromise;
+
+  connectPromise = (async () => {
+   try {
+    clearReconnectTimer();
     connectionStatus = 'connecting';
     console.log('Initializing WhatsApp connection...');
 
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_SESSION_DIR);
-
-    // Selalu pakai versi protokol WhatsApp Web terbaru. Versi yang basi adalah
-    // penyebab utama pesan tampil "Menunggu pesan ini" di HP (gagal dekripsi).
-    let waVersion;
-    try {
-      const { version } = await require('@whiskeysockets/baileys').fetchLatestBaileysVersion();
-      waVersion = version;
-      console.log('Using WhatsApp Web version:', version.join('.'));
-    } catch (e) {
-      console.warn('Gagal ambil versi WA terbaru, pakai default:', e.message);
-    }
-
-    sock = makeWASocket({
+    const generation = ++connectionGeneration;
+    const currentSock = makeWASocket({
       auth: state,
       logger: pino({ level: 'error' }),
-      ...(waVersion ? { version: waVersion } : {}),
-      // "appropriate" memilih identitas browser yang sesuai protokol WA terbaru.
-      // Identitas lama (macOS Desktop di Baileys 6.x) bisa menyebabkan HP utama
-      // gagal dekripsi pesan dari perangkat tertaut ("Menunggu pesan ini").
+      // Biarkan Baileys menggunakan versi protokol yang diuji bersama paketnya.
+      // Memaksa versi terbaru dari server WhatsApp dapat memutus koneksi saat handshake.
       browser: Browsers.appropriate('Desktop'),
-      // Kirim salinan pesan ke device lain (HP) supaya bisa didekripsi
       syncFullHistory: true,
-      // Jangan tampil "online" dari gateway agar HP utama tetap proses pesan normal
       markOnlineOnConnect: false,
       generateHighQualityLinkPreview: false,
     });
+    sock = currentSock;
 
-    sock.ev.on('creds.update', saveCreds);
+    currentSock.ev.on('creds.update', saveCreds);
 
     // ── Cache incoming & outgoing messages ────────────────────────────────
-    sock.ev.on('messages.upsert', (upsert) => {
+    currentSock.ev.on('messages.upsert', (upsert) => {
       if (upsert.type !== 'notify') return;
       for (const msg of upsert.messages) {
         cacheMessage(msg);
@@ -243,7 +255,7 @@ async function connectToWhatsApp() {
     });
 
     // ── Store chat history from initial sync ──────────────────────────────
-    sock.ev.on('messaging-history.set', (history) => {
+    currentSock.ev.on('messaging-history.set', (history) => {
       console.log(`History sync: ${history.messages?.length || 0} msgs, ${history.chats?.length || 0} chats, ${history.contacts?.length || 0} contacts`);
       
       // Store chats
@@ -273,12 +285,12 @@ async function connectToWhatsApp() {
     });
 
     // ── Chat lifecycle events ──────────────────────────────────────────────
-    sock.ev.on('chats.upsert', (chats) => {
+    currentSock.ev.on('chats.upsert', (chats) => {
       for (const chat of chats) {
         if (chat.id) chatStore.set(chat.id, chat);
       }
     });
-    sock.ev.on('chats.update', (updates) => {
+    currentSock.ev.on('chats.update', (updates) => {
       for (const update of updates) {
         if (update.id) {
           const existing = chatStore.get(update.id);
@@ -286,19 +298,19 @@ async function connectToWhatsApp() {
         }
       }
     });
-    sock.ev.on('chats.delete', (jids) => {
+    currentSock.ev.on('chats.delete', (jids) => {
       for (const jid of jids) {
         chatStore.delete(jid);
       }
     });
 
     // ── Contact lifecycle events ───────────────────────────────────────────
-    sock.ev.on('contacts.upsert', (contacts) => {
+    currentSock.ev.on('contacts.upsert', (contacts) => {
       for (const contact of contacts) {
         if (contact.id) contactStore.set(contact.id, contact);
       }
     });
-    sock.ev.on('contacts.update', (updates) => {
+    currentSock.ev.on('contacts.update', (updates) => {
       for (const update of updates) {
         if (update.id) {
           const existing = contactStore.get(update.id);
@@ -308,7 +320,7 @@ async function connectToWhatsApp() {
     });
 
     // ── Resolve push names (contact names) ────────────────────────────────
-    sock.ev.on('contacts.upsert', (contacts) => {
+    currentSock.ev.on('contacts.upsert', (contacts) => {
       for (const c of contacts) {
         const jid = c.id;
         if (!jid) continue;
@@ -324,7 +336,8 @@ async function connectToWhatsApp() {
       }
     });
 
-    sock.ev.on('connection.update', async (update) => {
+    currentSock.ev.on('connection.update', async (update) => {
+      if (generation !== connectionGeneration) return;
       const { connection, lastDisconnect, qr } = update;
 
       if (qr) {
@@ -350,19 +363,23 @@ async function connectToWhatsApp() {
       if (connection === 'open') {
         connectionStatus = 'connected';
         latestQr = null;
+        reconnectAttempts = 0;
         console.log('WhatsApp connected successfully!');
       }
 
       if (connection === 'close') {
         const error = lastDisconnect?.error;
-        const statusCode = error instanceof Boom ? error.output?.statusCode : null;
+        const statusCode = error instanceof Boom
+          ? error.output?.statusCode
+          : error?.output?.statusCode || error?.data?.statusCode || null;
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
-        console.log(`Connection closed. Reason: ${error?.message || 'unknown'}. Reconnecting: ${shouldReconnect}`);
+        sock = null;
+        console.log(`Connection closed. Reason: ${error?.message || 'unknown'} (code: ${statusCode || 'unknown'}). Reconnecting: ${shouldReconnect}`);
 
         if (shouldReconnect) {
           connectionStatus = 'connecting';
-          setTimeout(connectToWhatsApp, 3000);
+          scheduleReconnect(error?.message || 'connection closed');
         } else {
           connectionStatus = 'disconnected';
           latestQr = null;
@@ -376,10 +393,17 @@ async function connectToWhatsApp() {
       }
     });
 
-  } catch (err) {
+   } catch (err) {
     console.error('Error in connectToWhatsApp:', err);
     connectionStatus = 'disconnected';
-  }
+    sock = null;
+    scheduleReconnect(err.message || 'initialization failed');
+   } finally {
+    connectPromise = null;
+   }
+  })();
+
+  return connectPromise;
 }
 
 // API Routes
@@ -540,6 +564,9 @@ app.get('/api/groups', async (req, res) => {
 
 app.post('/api/logout', async (req, res) => {
   try {
+    connectionGeneration += 1;
+    clearReconnectTimer();
+    reconnectAttempts = 0;
     if (sock) {
       await sock.logout();
       try {
@@ -563,7 +590,7 @@ app.post('/api/connect', async (req, res) => {
     return res.json({ success: true, message: 'Already connected' });
   }
   
-  if (connectionStatus === 'connecting') {
+  if (connectionStatus === 'connecting' || sock || connectPromise || reconnectTimer) {
     return res.json({ success: true, message: 'Already connecting' });
   }
 
@@ -575,6 +602,9 @@ app.post('/api/connect', async (req, res) => {
 app.post('/api/reconnect', async (req, res) => {
   try {
     console.log('Force reconnecting...');
+    connectionGeneration += 1;
+    clearReconnectTimer();
+    reconnectAttempts = 0;
     
     // Disconnect current socket
     if (sock) {
@@ -598,7 +628,10 @@ app.post('/api/reconnect', async (req, res) => {
     latestQr = null;
     
     // Reconnect
-    setTimeout(() => connectToWhatsApp(), 1000);
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connectToWhatsApp();
+    }, 1000);
     
     res.json({ success: true, message: 'Reconnecting... Scan QR code when ready' });
   } catch (err) {
