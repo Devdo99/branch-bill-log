@@ -7,7 +7,38 @@ const fs = require('fs');
 const path = require('path');
 const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, Browsers, fetchLatestBaileysVersion } = require('@whiskeysockets/baileys');
 const { Boom } = require('@hapi/boom');
+const { proto } = require('@whiskeysockets/baileys');
 const { google } = require('googleapis');
+
+// ── Anti-crash: cegah proses mati diam-diam karena error tak terduga ──
+// Logger file agar log tetap ada walau jendela hidden (VBS)
+const LOG_FILE = path.join(__dirname, 'gateway.log');
+const origLog = console.log.bind(console);
+const origErr = console.error.bind(console);
+const origWarn = console.warn.bind(console);
+function logToFile(level, args) {
+  try {
+    const line = `[${new Date().toISOString()}] [${level}] ${args.map(a => (typeof a === 'string' ? a : require('util').inspect(a, { depth: 3 }))).join(' ')}\n`;
+    fs.appendFileSync(LOG_FILE, line);
+    // Rotasi sederhana: max ~2MB
+    try {
+      const st = fs.statSync(LOG_FILE);
+      if (st.size > 2 * 1024 * 1024) {
+        fs.renameSync(LOG_FILE, LOG_FILE + '.old');
+      }
+    } catch (_) {}
+  } catch (_) {}
+}
+console.log = (...a) => { origLog(...a); logToFile('info', a); };
+console.error = (...a) => { origErr(...a); logToFile('error', a); };
+console.warn = (...a) => { origWarn(...a); logToFile('warn', a); };
+
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION (ditangkap, proses tetap jalan):', err && err.stack ? err.stack : err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('UNHANDLED REJECTION (ditangkap, proses tetap jalan):', reason instanceof Error ? reason.stack : reason);
+});
 
 const app = express();
 app.use(cors());
@@ -24,6 +55,44 @@ let connectionGeneration = 0;
 let connectPromise = null;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
+
+// ── Heartbeat & stale-connection watchdog ──────────────────────────────
+// Koneksi socket bisa "mati diam-diam" (misal setelah laptop sleep, ganti
+// Wi-Fi, atau koneksi internet diputus sesaat). Socket masih terlihat
+// 'connected' padahal paket tidak mengalir lagi — pesan yang dikirim
+// sepanjang periode ini TIDAK PERNAH SAMPAI. Solusi:
+//   1. Kirim ping kecil tiap 25 detik agar stream tetap hidup.
+//   2. Kalau tidak ada aktivitas sama sekali > 60 detik, anggap stale dan
+//      restart koneksi (session tersimpan, tidak perlu scan QR ulang).
+let lastActivityAt = Date.now();
+let heartbeatTimer = null;
+const HEARTBEAT_INTERVAL_MS = 25000;
+const STALE_THRESHOLD_MS = 60000;
+
+function touchActivity() {
+  lastActivityAt = Date.now();
+}
+
+function startHeartbeat() {
+  stopHeartbeat();
+  lastActivityAt = Date.now();
+  heartbeatTimer = setInterval(() => {
+    const s = sock;
+    if (!s || connectionStatus !== 'connected') return;
+    const idleFor = Date.now() - lastActivityAt;
+    if (idleFor > STALE_THRESHOLD_MS) {
+      console.warn(`Koneksi stale ${Math.round(idleFor / 1000)}s tanpa aktivitas — restart koneksi...`);
+      try { s.end(new Error('stale connection (no activity)')); } catch (e) {}
+    }
+  }, HEARTBEAT_INTERVAL_MS);
+}
+
+function stopHeartbeat() {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer);
+    heartbeatTimer = null;
+  }
+}
 
 function clearReconnectTimer() {
   if (reconnectTimer) {
@@ -56,6 +125,15 @@ const MAX_CHATS = 200;
 
 function cacheMessage(msg) {
   if (!msg || !msg.key || !msg.key.remoteJid) return;
+  try {
+    cacheMessageInner(msg);
+  } catch (e) {
+    // Satu pesan bermasalah tidak boleh menggagalkan koneksi/pengiriman
+    console.warn('cacheMessage gagal untuk satu pesan:', e.message);
+  }
+}
+
+function cacheMessageInner(msg) {
   const jid = msg.key.remoteJid;
   if (jid === 'status@broadcast') return;
 
@@ -75,6 +153,9 @@ function cacheMessage(msg) {
   let mediaUrl = null;
   let mediaType = null;
   let caption = null;
+  // PENTING: harus dideklarasi di scope fungsi (dulu di dalam if(m) sehingga
+  // menyebabkan ReferenceError di bawah dan pesan gambar gagal terkirim)
+  let quotedMessage = null;
   const m = msg.message;
 
   if (m) {
@@ -93,7 +174,6 @@ function cacheMessage(msg) {
     else { body = JSON.stringify(m).slice(0, 200); }
 
     // Extract quoted message (reply)
-    let quotedMessage = null;
     const contextInfo = m?.extendedTextMessage?.contextInfo || m?.imageMessage?.contextInfo || m?.videoMessage?.contextInfo || m?.documentMessage?.contextInfo || m?.conversation?.contextInfo;
     if (contextInfo?.quotedMessage) {
       const qm = contextInfo.quotedMessage;
@@ -204,6 +284,10 @@ function getChatList() {
 }
 
 async function connectToWhatsApp() {
+  // Guard: jangan buat socket kedua bila masih terhubung / sedang menyambung.
+  // Dua socket dengan sesi yang sama membuat WhatsApp menolak sesi (401)
+  // dan pesan tidak pernah terkirim.
+  if (connectionStatus === 'connected' && sock) return;
   if (connectPromise) return connectPromise;
 
   connectPromise = (async () => {
@@ -211,7 +295,6 @@ async function connectToWhatsApp() {
     clearReconnectTimer();
     connectionStatus = 'connecting';
     console.log('Initializing WhatsApp connection...');
-
     const { state, saveCreds } = await useMultiFileAuthState(AUTH_SESSION_DIR);
     const generation = ++connectionGeneration;
     // Selalu pakai versi protokol WA Web terbaru agar handshake tidak ditolak (kode 428).
@@ -222,11 +305,16 @@ async function connectToWhatsApp() {
       console.warn('Gagal mengambil versi WA Web terbaru, memakai versi bawaan Baileys:', e.message);
     }
     if (waVersion) console.log('Menggunakan versi protokol WA Web:', waVersion.join('.'));
+    if (sock) {
+      // Socket lama masih ada — paksa matikan agar tidak ada 2 klien sekaligus
+      try { sock.end(new Error('replaced by new connection')); } catch (_) {}
+      sock = null;
+    }
     const currentSock = makeWASocket({
       version: waVersion,
       auth: state,
       logger: pino({ level: 'error' }),
-      browser: Browsers.macOS('Desktop'),
+      browser: Browsers.ubuntu('Chrome'), // lebih stabil untuk pairing code & QR
       // syncFullHistory: true memicu history sync masif yang sering membuat server
       // memutus stream (428). Sync normal tetap berjalan via messaging-history.set.
       syncFullHistory: false,
@@ -239,8 +327,16 @@ async function connectToWhatsApp() {
 
     currentSock.ev.on('creds.update', saveCreds);
 
+    // Hitung SEMUA frame masuk sebagai aktivitas (termasuk respons keepalive
+    // internal Baileys) supaya watchdog tidak salah restart koneksi yang
+    // sehat tapi sedang sepi pesan.
+    try {
+      currentSock.ws.on('message', touchActivity);
+    } catch (_) {}
+
     // ── Cache incoming & outgoing messages ────────────────────────────────
     currentSock.ev.on('messages.upsert', (upsert) => {
+      touchActivity();
       if (upsert.type !== 'notify') return;
       for (const msg of upsert.messages) {
         cacheMessage(msg);
@@ -262,6 +358,34 @@ async function connectToWhatsApp() {
             contactStore.set(partJid, { id: partJid, name: msg.pushName, notify: msg.pushName, ...(existing || {}) });
           }
         }
+      }
+    });
+
+    // ── Tandai pesan keluar sebagai TERKIRIM (ack dari server WA) ─────
+    // Ack 1 = terkirim ke perangkat penerima, 2 = dibaca, 3 = diputar.
+    currentSock.ev.on('messages.update', (updates) => {
+      touchActivity();
+      for (const u of updates) {
+        const status = u.update?.status;
+        if (!status || !u.key?.id) continue;
+        const jid = u.key.remoteJid;
+        const msgs = jid ? messageCache.get(jid) : null;
+        const target = msgs?.find(m => m.id === u.key.id);
+        if (target) target.delivered = status >= 1;
+      }
+    });
+
+    // ── Tandai pesan keluar sebagai TERKIRIM (ack dari server WA) ─────
+    // Ack 1 = terkirim ke perangkat penerima, 2 = dibaca, 3 = diputar.
+    currentSock.ev.on('messages.update', (updates) => {
+      touchActivity();
+      for (const u of updates) {
+        const status = u.update?.status;
+        if (!status || !u.key?.id) continue;
+        const jid = u.key.remoteJid;
+        const msgs = jid ? messageCache.get(jid) : null;
+        const target = msgs?.find(m => m.id === u.key.id);
+        if (target) target.delivered = status >= 1;
       }
     });
 
@@ -357,8 +481,8 @@ async function connectToWhatsApp() {
         qrcodeTerminal.generate(qr, { small: true });
         
         try {
-          // Generate QR as base64 for frontend
-          latestQr = await QRCode.toDataURL(qr);
+        // QR besar + margin lebar supaya lebih mudah discan kamera HP
+        latestQr = await QRCode.toDataURL(qr, { width: 640, margin: 4 });
         } catch (err) {
           console.error('Error generating base64 QR:', err);
         }
@@ -375,6 +499,7 @@ async function connectToWhatsApp() {
         connectionStatus = 'connected';
         latestQr = null;
         reconnectAttempts = 0;
+        startHeartbeat();
         console.log('WhatsApp connected successfully!');
       }
 
@@ -386,6 +511,7 @@ async function connectToWhatsApp() {
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
         sock = null;
+        stopHeartbeat();
         console.log(`Connection closed. Reason: ${error?.message || 'unknown'} (code: ${statusCode || 'unknown'}). Reconnecting: ${shouldReconnect}`);
 
         if (shouldReconnect) {
@@ -472,6 +598,18 @@ function guessImageMime(buf) {
   return 'image/jpeg';
 }
 
+// Kirim pesan dengan timeout: jika socket stale, sendMessage bisa menggantung
+// tanpa error sehingga HTTP request menggantung juga. Timeout memastikan
+// error terlihat dan frontend bisa menampilkan pesan gagal.
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timeout (${Math.round(ms / 1000)}s) — kemungkinan koneksi WhatsApp terputus, tunggu auto-reconnect lalu coba lagi`)), ms)
+    ),
+  ]);
+}
+
 app.post('/api/send-message', async (req, res) => {
   const { phone, jid, message, media } = req.body;
 
@@ -524,29 +662,29 @@ app.post('/api/send-message', async (req, res) => {
       const mime = guessImageMime(mediaBuffers[0]);
       const msgObj = { image: mediaBuffers[0], mimetype: mime, caption: message };
       if (contextInfo) msgObj.contextInfo = contextInfo;
-      await sock.sendMessage(target, msgObj);
+      await withTimeout(sock.sendMessage(target, msgObj), 60000, 'Kirim gambar');
     } else if (mediaBuffers.length > 1) {
       try {
         // Album = beberapa gambar dalam satu pesan
-        await sock.sendMessage(target, {
+        await withTimeout(sock.sendMessage(target, {
           album: mediaBuffers.map((b) => ({ image: b, mimetype: guessImageMime(b) })),
           caption: message,
-        });
+        }), 90000, 'Kirim album');
       } catch (albumErr) {
         // Fallback: kirim setiap gambar sebagai pesan terpisah
         console.warn('Album send failed, sending individually:', albumErr.message);
         for (let i = 0; i < mediaBuffers.length; i++) {
-          await sock.sendMessage(target, {
+          await withTimeout(sock.sendMessage(target, {
             image: mediaBuffers[i],
             mimetype: guessImageMime(mediaBuffers[i]),
             caption: i === 0 ? message : undefined,
-          });
+          }), 60000, 'Kirim gambar');
         }
       }
     } else {
       const msgObj = { text: message };
       if (contextInfo) msgObj.contextInfo = contextInfo;
-      await sock.sendMessage(target, msgObj);
+      await withTimeout(sock.sendMessage(target, msgObj), 45000, 'Kirim pesan');
     }
 
     res.json({ success: true, message: 'Message sent successfully', mediaCount: mediaBuffers.length });
@@ -610,6 +748,32 @@ app.post('/api/connect', async (req, res) => {
 
   connectToWhatsApp();
   res.json({ success: true, message: 'Connecting initialized' });
+});
+
+// ── POST /api/pairing-code — Sambungkan TANPA scan QR (8 karakter) ──
+// Di HP: Perangkat Tertaut → Tautkan Perangkat → "Tautkan dengan nomor telepon saja"
+app.post('/api/pairing-code', async (req, res) => {
+  try {
+    const phone = String(req.body?.phone || '').replace(/\D/g, '');
+    if (phone.length < 8) {
+      return res.status(400).json({ error: 'Nomor HP tidak valid (contoh: 6281234567890)' });
+    }
+    if (connectionStatus === 'connected') {
+      return res.status(400).json({ error: 'Sudah terhubung — tidak perlu pairing ulang' });
+    }
+    if (!sock) {
+      return res.status(400).json({ error: 'Socket belum siap. Tunggu beberapa detik sampai QR muncul, lalu coba lagi' });
+    }
+    const rawCode = await sock.requestPairingCode(phone);
+    const clean = String(rawCode || '').replace(/[^A-Z0-9]/gi, '').toUpperCase();
+    if (!clean) throw new Error('Kode pairing kosong dari server WA');
+    const formatted = clean.length >= 8 ? `${clean.slice(0, 4)}-${clean.slice(4, 8)}` : clean;
+    console.log(`Pairing code dibuat untuk ${phone}: ${formatted}`);
+    res.json({ success: true, code: formatted });
+  } catch (err) {
+    console.error('Error requesting pairing code:', err?.message || err);
+    res.status(500).json({ error: err?.message || 'Gagal membuat pairing code' });
+  }
 });
 
 // ── POST /api/reconnect — Force fresh connection (triggers history sync) ──
@@ -1173,7 +1337,30 @@ app.post('/api/gsheets/sync-now', async (req, res) => {
 });
 
 // Start Express and connect automatically
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`WhatsApp Gateway server running on port ${PORT}`);
   connectToWhatsApp();
 });
+
+// Port sudah dipakai proses lain (mis. backend lama yang masih hidden):
+// JANGAN biarkan proses zombie hidup tanpa server — keluar dengan pesan jelas
+// agar loop auto-restart di .bat mencoba lagi dan penyebabnya terlihat.
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`PORT ${PORT} sudah dipakai proses lain! Matikan dulu backend lama (atau jalankan: taskkill /F /PID <nomor>) lalu restart.`);
+  } else {
+    console.error('Server error:', err);
+  }
+  process.exit(1);
+});
+
+// Graceful shutdown: tutup socket WA rapi saat proses dihentikan (Ctrl+C / shutdown)
+async function shutdown(signal) {
+  console.log(`Menerima ${signal}, menutup koneksi WhatsApp...`);
+  stopHeartbeat();
+  clearReconnectTimer();
+  try { if (sock) sock.end(new Error('server shutdown')); } catch (_) {}
+  process.exit(0);
+}
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));

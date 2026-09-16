@@ -20,10 +20,14 @@ type ConnectionState = "offline" | "disconnected" | "connecting" | "connected";
 
 export default function ManagerWhatsApp() {
   const [status, setStatus] = useState<ConnectionState>("offline");
-  const [qrCode, setQrCode] = useState<string | null>(null);
+  const [qrCode, setQrCode] = useState<string | "loading" | null>(null);
   const [loading, setLoading] = useState(true);
   const [spawning, setSpawning] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  // Pairing code (sambung tanpa scan QR)
+  const [pairPhone, setPairPhone] = useState(localStorage.getItem("pair_phone") || "");
+  const [pairCode, setPairCode] = useState<string | null>(null);
+  const [pairing, setPairing] = useState(false);
   
   // Test message form
   const [testPhone, setTestPhone] = useState("");
@@ -37,8 +41,8 @@ export default function ManagerWhatsApp() {
       const res = await fetch("http://localhost:5000/api/status");
       if (!res.ok) throw new Error("Server error");
       const data = await res.json();
-      setStatus(data.status);
-      setQrCode(data.qr);
+      setStatus(data.status);      setQrCode(data.qr || null);
+      if (data.status === "connected") setPairCode(null);
     } catch (err) {
       setStatus("offline");
       setQrCode(null);
@@ -64,6 +68,29 @@ export default function ManagerWhatsApp() {
       toast.error(err.message || "Gagal menyalakan server");
     } finally {
       setSpawning(false);
+    }
+  };
+
+  const handlePairingCode = async () => {
+    const phone = pairPhone.replace(/\D/g, "");
+    if (!phone || phone.length < 8) return toast.error("Masukkan nomor WhatsApp yang valid");
+    setPairing(true);
+    setPairCode(null);
+    try {
+      const res = await fetch("http://localhost:5000/api/pairing-code", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Gagal membuat kode pairing");
+      setPairCode(data.code);
+      localStorage.setItem("pair_phone", pairPhone);
+      toast.success("Kode pairing dibuat! Segera masukkan di HP Anda.");
+    } catch (err: any) {
+      toast.error(err?.message || "Gagal membuat kode pairing");
+    } finally {
+      setPairing(false);
     }
   };
 
@@ -184,7 +211,7 @@ export default function ManagerWhatsApp() {
                 <QrCode className="h-5 w-5 text-primary" /> Pindai Kode QR
               </h3>
               <div className="bg-white p-4 rounded-lg border shadow-sm">
-                <img src={qrCode} alt="WhatsApp QR Code" className="h-64 w-64 object-contain" />
+                <img src={qrCode} alt="WhatsApp QR Code" className="h-80 w-80 object-contain" />
               </div>
               <p className="text-xs text-muted-foreground mt-4">
                 Kode QR diperbarui otomatis. Pindai sebelum kode kedaluwarsa.
@@ -213,7 +240,32 @@ export default function ManagerWhatsApp() {
                   Tunggu hingga proses sinkronisasi selesai dan status di atas berubah menjadi <strong>Terhubung</strong>.
                 </li>
               </ol>
-              
+
+              {/* ── Pairing Code: alternatif tanpa scan QR ── */}
+              <div className="mt-6 p-4 rounded-md border border-primary/40 bg-primary/5">
+                <h4 className="font-semibold text-sm mb-1">Tidak bisa scan QR? Gunakan Kode Pairing</h4>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Masukkan <strong>nomor WhatsApp Anda</strong> (contoh: 6281234567890). Lalu di HP: <strong>Perangkat Tertaut</strong> → <strong>Tautkan Perangkat</strong> → ketuk link <strong>"Tautkan dengan nomor telepon saja"</strong> di bagian bawah, dan ketik kode yang muncul di sini.
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="6281234567890"
+                    value={pairPhone}
+                    onChange={(e) => setPairPhone(e.target.value)}
+                    inputMode="tel"
+                  />
+                  <Button onClick={handlePairingCode} disabled={pairing} variant="outline" className="shrink-0">
+                    {pairing ? "Membuat..." : "Buat Kode Pairing"}
+                  </Button>
+                </div>
+                {pairCode && (
+                  <div className="mt-3 text-center p-4 rounded-md bg-primary text-primary-foreground">
+                    <div className="font-mono font-bold text-3xl tracking-[0.3em] select-all">{pairCode}</div>
+                    <div className="text-xs mt-2 opacity-90">Ketik kode ini di HP Anda segera (kedaluwarsa dalam ±1 menit)</div>
+                  </div>
+                )}
+              </div>
+
               <div className="mt-6 p-4 rounded-md bg-accent/60 border border-accent flex items-start gap-3">
                 <AlertCircle className="h-5 w-5 text-accent-foreground shrink-0 mt-0.5" />
                 <div className="text-xs text-accent-foreground/90">
