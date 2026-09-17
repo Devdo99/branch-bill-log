@@ -563,9 +563,9 @@ function isImageBuffer(buf) {
   return false;
 }
 
-// Ambil buffer gambar dari URL (signed URL Supabase) atau data URI base64.
-// Hanya buffer gambar yang diterima; media non-gambar dilewati agar satu
-// foto rusak tidak menggagalkan seluruh pengiriman.
+// Ambil buffer dari URL (signed URL Supabase) atau data URI base64.
+// Buffer apapun diterima (bukan hanya gambar) agar video/dokumen bisa dikirim
+// dari halaman chat; tipe pesan ditentukan lewat mimetype di /api/send-message.
 async function fetchRemoteBuffer(url, timeoutMs = 15000) {
   try {
     if (typeof url === 'string' && url.startsWith('data:')) {
@@ -573,16 +573,14 @@ async function fetchRemoteBuffer(url, timeoutMs = 15000) {
       if (comma === -1) return null;
       const base64 = url.slice(comma + 1);
       if (!base64) return null;
-      const buf = Buffer.from(base64, 'base64');
-      return isImageBuffer(buf) ? buf : null;
+      return Buffer.from(base64, 'base64');
     }
     const res = await fetch(url, { signal: AbortSignal.timeout(timeoutMs) });
     if (!res.ok) {
       console.error('Failed to fetch media, status:', res.status, url.slice(0, 80));
       return null;
     }
-    const buf = Buffer.from(await res.arrayBuffer());
-    return isImageBuffer(buf) ? buf : null;
+    return Buffer.from(await res.arrayBuffer());
   } catch (err) {
     console.error('Error fetching media:', err.message);
     return null;
@@ -610,10 +608,25 @@ function withTimeout(promise, ms, label) {
   ]);
 }
 
+// Cache pesan keluar (echo) agar pesan yang dikirim gateway langsung muncul
+// di daftar pesan frontend. Tanpa ini, pesan keluar tak terlihat di UI chat
+// sehingga pengguna mengira pesan gagal terkirim padahal sudah sampai.
+function cacheOutgoingMessage(target, message, msgId) {
+  try {
+    cacheMessage({
+      key: { remoteJid: target, id: msgId, fromMe: true },
+      message: { conversation: message || '' },
+      messageTimestamp: Math.floor(Date.now() / 1000),
+    });
+  } catch (e) {
+    console.warn('cacheOutgoingMessage gagal:', e.message);
+  }
+}
+
 app.post('/api/send-message', async (req, res) => {
   const { phone, jid, message, media } = req.body;
 
-  if ((!phone && !jid) || !message) {
+  if ((!phone && !jid) || (!message && !(Array.isArray(media) && media.length > 0))) {
     return res.status(400).json({ error: 'Target (phone/jid) and message are required' });
   }
 
@@ -634,13 +647,23 @@ app.post('/api/send-message', async (req, res) => {
       target = cleaned.includes('@') ? cleaned : `${cleaned}@s.whatsapp.net`;
     }
 
-    // Unduh semua media (URL atau data URI) menjadi buffer
-    let mediaBuffers = [];
-    if (Array.isArray(media) && media.length > 0) {
-      for (const url of media.slice(0, 30)) {
-        const buf = await fetchRemoteBuffer(url);
-        if (buf) mediaBuffers.push(buf);
-      }
+    // Deteksi kirim ke diri sendiri (chat "Message yourself")
+    const getMeId = () => (sock && sock.user && sock.user.id) || '';
+    const getMeLidUser = () => {
+      const meLid = sock && sock.user && sock.user.lid;
+      const u = meLid ? String(meLid).split('@')[0].split(':')[0] : null;
+      return u || null;
+    };
+    const meJid = getMeId();
+    const meUser = meJid ? String(meJid).split('@')[0].split(':')[0] : '';
+    const targetUser = String(target).split('@')[0].split(':')[0];
+    const targetServer = String(target).split('@')[1] || '';
+    const isSelfSend = !target.includes('@g.us') && (
+      targetUser === meUser ||
+      (getMeLidUser() && targetUser === getMeLidUser())
+    );
+    if (isSelfSend) {
+      console.log(`Self-send terdeteksi: target=${target} me=${meJid} meLid=${getMeLidUser() || '-'}`);
     }
 
     // Build reply context if quotedMsgId is provided
@@ -658,39 +681,112 @@ app.post('/api/send-message', async (req, res) => {
     }
     const contextInfo = quotedMsg ? { quotedMessage: quotedMsg.message, stanzaId: quotedMsg.key.id, participant: quotedMsg.key.fromMe ? undefined : quotedMsg.key.remoteJid } : undefined;
 
-    if (mediaBuffers.length === 1) {
-      const mime = guessImageMime(mediaBuffers[0]);
-      const msgObj = { image: mediaBuffers[0], mimetype: mime, caption: message };
+    // ── Kirim media ──
+    // Frontend mengirim { file, dataUrl } — file dipakai untuk menentukan tipe
+    // (gambar/video/audio/dokumen) & mimetype persis, dataUrl untuk isinya.
+    let items = [];
+    if (Array.isArray(media) && media.length > 0) {
+      const rawItems = media.slice(0, 30);
+      const buffers = await Promise.all(rawItems.map((m) => fetchRemoteBuffer(typeof m === 'string' ? m : m?.dataUrl)));
+      items = rawItems
+        .map((m, i) => ({
+          buf: buffers[i],
+          mimetype: typeof m === 'object' && m && m.mimetype ? m.mimetype : null,
+          fileName: typeof m === 'object' && m ? m.fileName || null : null,
+          isImage: typeof m === 'object' && m ? m.isImage !== false : undefined,
+        }))
+        .filter((x) => x.buf);
+      // Data URI punya mimetype di header "data:...;base64" — pakai bila ada
+      for (let i = 0; i < rawItems.length; i++) {
+        const m = rawItems[i];
+        if (typeof m === 'string' && m.startsWith('data:')) {
+          const semi = m.indexOf(';');
+          if (semi > 5 && !items[i]) continue;
+          const mt = m.slice(5, semi);
+          const it = items[i];
+          if (it && mt && mt !== 'application/octet-stream') it.mimetype = it.mimetype || mt;
+        }
+      }
+    }
+
+    // Log self-send sebelum kirim agar mudah didiagnosis dari gateway.log
+    if (isSelfSend) {
+      console.log(`Self-send: mengirim ${items.length} media + teks ke ${target}`);
+    }
+
+    let lastSentMsgId = null;
+    const captureMsgId = (p) => { if (p && p.key && p.key.id) lastSentMsgId = p.key.id; return p; };
+
+    if (items.length === 1) {
+      const it = items[0];
+      const isImage = it.isImage !== undefined ? it.isImage : isImageBuffer(it.buf);
+      const mime = it.mimetype || (isImage ? guessImageMime(it.buf) : 'application/octet-stream');
+      let msgObj;
+      if (isImage) {
+        msgObj = { image: it.buf, mimetype: mime, caption: message || undefined };
+      } else if ((it.mimetype || '').startsWith('video/')) {
+        msgObj = { video: it.buf, mimetype: mime, caption: message || undefined };
+      } else if ((it.mimetype || '').startsWith('audio/')) {
+        msgObj = { audio: it.buf, mimetype: mime, ptt: false };
+      } else {
+        // Dokumen (pdf, xls, dll) — selalu sertakan fileName agar tampil rapi
+        msgObj = { document: it.buf, mimetype: mime, fileName: it.fileName || 'file', caption: message || undefined };
+      }
       if (contextInfo) msgObj.contextInfo = contextInfo;
-      await withTimeout(sock.sendMessage(target, msgObj), 60000, 'Kirim gambar');
-    } else if (mediaBuffers.length > 1) {
+      const sent = await withTimeout(sock.sendMessage(target, msgObj), 60000, 'Kirim media');
+      captureMsgId(sent);
+    } else if (items.length > 1) {
+      let sentAlbum = false;
       try {
-        // Album = beberapa gambar dalam satu pesan
-        await withTimeout(sock.sendMessage(target, {
-          album: mediaBuffers.map((b) => ({ image: b, mimetype: guessImageMime(b) })),
-          caption: message,
-        }), 90000, 'Kirim album');
+        // Semua item gambar → kirim sebagai album (satu pesan)
+        const allImages = items.every((it) => (it.isImage !== undefined ? it.isImage : isImageBuffer(it.buf)));
+        if (allImages) {
+          const sent = await withTimeout(sock.sendMessage(target, {
+            album: items.map((it) => ({ image: it.buf, mimetype: it.mimetype || guessImageMime(it.buf) })),
+            caption: message || undefined,
+          }), 90000, 'Kirim album');
+          captureMsgId(sent);
+          sentAlbum = true;
+        }
       } catch (albumErr) {
-        // Fallback: kirim setiap gambar sebagai pesan terpisah
         console.warn('Album send failed, sending individually:', albumErr.message);
-        for (let i = 0; i < mediaBuffers.length; i++) {
-          await withTimeout(sock.sendMessage(target, {
-            image: mediaBuffers[i],
-            mimetype: guessImageMime(mediaBuffers[i]),
-            caption: i === 0 ? message : undefined,
-          }), 60000, 'Kirim gambar');
+      }
+      if (!sentAlbum) {
+        // Campuran / album gagal: kirim satu per satu sesuai tipenya
+        for (let i = 0; i < items.length; i++) {
+          const it = items[i];
+          const isImage = it.isImage !== undefined ? it.isImage : isImageBuffer(it.buf);
+          const mime = it.mimetype || (isImage ? guessImageMime(it.buf) : 'application/octet-stream');
+          let msgObj;
+          if (isImage) {
+            msgObj = { image: it.buf, mimetype: mime, caption: i === 0 ? (message || undefined) : undefined };
+          } else if ((it.mimetype || '').startsWith('video/')) {
+            msgObj = { video: it.buf, mimetype: mime, caption: i === 0 ? (message || undefined) : undefined };
+          } else if ((it.mimetype || '').startsWith('audio/')) {
+            msgObj = { audio: it.buf, mimetype: mime, ptt: false };
+          } else {
+            msgObj = { document: it.buf, mimetype: mime, fileName: it.fileName || `file-${i + 1}`, caption: i === 0 ? (message || undefined) : undefined };
+          }
+          const sent = await withTimeout(sock.sendMessage(target, msgObj), 60000, 'Kirim media');
+          captureMsgId(sent);
         }
       }
     } else {
       const msgObj = { text: message };
       if (contextInfo) msgObj.contextInfo = contextInfo;
-      await withTimeout(sock.sendMessage(target, msgObj), 45000, 'Kirim pesan');
+      const sent = await withTimeout(sock.sendMessage(target, msgObj), 45000, 'Kirim pesan');
+      captureMsgId(sent);
     }
 
-    res.json({ success: true, message: 'Message sent successfully', mediaCount: mediaBuffers.length });
+    // Catat pesan keluar ke cache agar langsung tampil di UI chat
+    cacheOutgoingMessage(target, message || '', lastSentMsgId);
+
+    res.json({ success: true, message: 'Message sent successfully', mediaCount: items.length });
   } catch (err) {
     console.error('Error sending message:', err);
-    res.status(500).json({ error: err.message || 'Failed to send message' });
+    // Sertakan detail status Boom (kode disconnect WA) untuk diagnosis
+    const detail = err?.output?.statusCode ? ` (code ${err.output.statusCode})` : '';
+    res.status(500).json({ error: (err.message || 'Failed to send message') + detail });
   }
 });
 

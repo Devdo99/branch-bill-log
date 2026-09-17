@@ -322,9 +322,15 @@ export default function ManagerWhatsAppChat() {
         jid: selectedChat.jid,
         message: replyText.trim() || (pendingFiles.length > 0 ? " " : ""),
       };
-      // Attach media data URIs
+      // Attach media data URIs (dengan mimetype & nama file agar backend
+      // bisa memilih tipe pesan yang tepat: gambar/video/audio/dokumen)
       if (pendingFiles.length > 0) {
-        body.media = pendingFiles.map((f) => f.dataUrl);
+        body.media = pendingFiles.map((f) => ({
+          dataUrl: f.dataUrl,
+          mimetype: f.file.type || undefined,
+          fileName: f.file.name || undefined,
+          isImage: f.file.type.startsWith("image/"),
+        }));
       }
       // Attach reply context
       if (replyToMsg) {
@@ -335,8 +341,8 @@ export default function ManagerWhatsAppChat() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Gagal mengirim");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `Gagal mengirim (HTTP ${res.status})`);
 
       // Determine the type of the first media for display
       const hasMedia = pendingFiles.length > 0;
