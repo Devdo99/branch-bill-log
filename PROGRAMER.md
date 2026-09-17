@@ -8,8 +8,8 @@
 ## 0. Konteks
 
 - App: manajemen nota (web), flow sudah berfungsi.
-- Brand acuan: Saung by Bebek Belvr (skema warna sama dengan dashboard OrbitPOS
-  yang sudah dibuat — referensi implementasi: `orbitpos-dashboard-nav.jsx`).
+- Tema: "Clean Blue Ledger" — primary biru #1D63ED dengan netral dingin.
+  Fokus: kejelasan angka & status untuk data keuangan yang dicek harian.
 - Target pemakai: staff finance/operasional, dipakai berulang tiap hari, bukan
   landing page. Prioritas: cepat dibaca, rapi saat data banyak, tidak capek
   mata dipakai lama.
@@ -18,30 +18,30 @@
 
 ## 1. Design tokens
 
-Simpan sebagai satu sumber kebenaran (`theme.ts` / `tailwind.config` / CSS
-variables) — jangan hardcode hex di tiap komponen.
+Simpan sebagai satu sumber kebenaran (`src/index.css` CSS variables +
+`tailwind.config.ts`) — jangan hardcode hex di tiap komponen.
 
 ```
---color-primary:        #1F3A2E   // hijau tua — header, nav aktif, tombol utama
---color-primary-dark:   #16281F
---color-accent:         #C99A3E   // gold — indikator aktif, highlight angka penting
---color-accent-soft:    #F4E9D2   // background badge/status ringan
---color-bg:              #F7F6F2   // page background
+--color-primary:        #1D63ED   // biru — header, nav aktif, tombol utama
+--color-primary-dark:   #1056C6   // hover / versi lebih gelap
+--color-primary-soft:   #EAF1FF   // highlight baris terpilih / badge info
+--color-bg:              #F7F8FA   // page background
 --color-surface:         #FFFFFF   // card, table, modal
---color-border:           #E4E1D6   // hairline antar elemen
---color-text-primary:     #20201C
---color-text-secondary:   #6B6A60
---color-text-muted:       #9C9A8E
+--color-border:           #E3E6EB   // hairline antar elemen
+--color-text-primary:     #111827
+--color-text-secondary:   #5B6472
+--color-text-muted:       #8B93A1
+--color-sidebar:          #10203F   // sidebar biru gelap (ledger)
 
---color-success:         #3B6D11
---color-success-bg:      #EAF3DE   // nota lunas
---color-warning:         #854F0B
---color-warning-bg:      #FAEEDA   // nota jatuh tempo dekat
---color-danger:          #A32D2D
---color-danger-bg:       #FCEBEB   // nota overdue / batal
+--color-success:         #0F9D58
+--color-success-bg:      #EBF2EB   // nota lunas / sudah dicatat
+--color-warning:         #B45309
+--color-warning-bg:      #FFF6E5   // belum lunas / menunggu approval
+--color-danger:          #DC2626
+--color-danger-bg:       #FEECEC   // lewat jatuh tempo / selisih / nota hilang
 
 --font-ui:      "Inter", system-ui, sans-serif   // semua UI, termasuk judul
---font-numeric: tabular-nums                      // WAJIB untuk nominal & tanggal
+--font-numeric: tabular-nums                      // WAJIB untuk nominal & tanggal (di CSS sudah jadi class .num)
 
 --radius-default: 10px    // card, input, button
 --radius-badge:    6px
@@ -54,6 +54,10 @@ Aturan: satu warna primary untuk 1 aksi utama per layar. Semantic color
 (success/warning/danger) **wajib** dipakai untuk status nota — jangan hanya
 warna teks merah/hijau tanpa label teks, supaya tetap jelas untuk staff buta
 warna.
+
+Palet yang sama dipakai di laporan PDF (`src/lib/pdf.ts`, objek `C` dalam RGB).
+Kalau token di atas berubah, selaraskan juga palet PDF. Nilai HSL persis ada
+di `src/index.css` (light & dark).
 
 ## 2. Layout global
 
@@ -69,7 +73,8 @@ Pola sama dengan dashboard existing:
 └───────────┴─────────────────────────────────────┘
 ```
 
-- Nav item aktif: indikator gold geser halus (`transition ease-out 250-300ms`),
+- Nav item aktif: indikator biru terang (`--sidebar-primary`) geser halus
+  (`transition ease-out 250-300ms`),
   bukan langsung snap.
 - Navigasi dangkal: menu nota (Arsip, Buat nota, Rekap) maksimal 1 klik dari
   sidebar, jangan ditumpuk di submenu.
@@ -149,7 +154,7 @@ Setiap halaman list/detail perlu 4 state eksplisit:
 - Semua angka di layar sama besar tanpa hierarki.
 - Empty state kosong tanpa CTA.
 - Warna vibrant/playful untuk konteks finansial — tetap di palet tenang di
-  atas (hijau tua/gold/netral), bukan gradient ungu-pink.
+  atas (biru/netral dingin), bukan gradient ungu-pink.
 
 ## 7. Instruksi untuk AI agent
 
