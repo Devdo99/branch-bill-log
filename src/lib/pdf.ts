@@ -9,25 +9,25 @@ import jsPDF from "jspdf";
 import { formatRupiah, formatDate, formatDateTime } from "./format";
 
 // ────────────────────────────────────────────
-// Brand Colors (matching CSS tokens)
+// Brand Colors (matching CSS tokens — tema "Clean Blue Ledger")
 // ────────────────────────────────────────────
 const C = {
-  primary: [31, 58, 46] as const,        // #1F3A2E — deep green
-  primaryDark: [22, 40, 31] as const,    // #16281F
-  accent: [201, 154, 62] as const,       // #C99A3E — gold
-  accentSoft: [244, 233, 210] as const,  // #F4E9D2
-  bg: [247, 246, 242] as const,          // #F7F6F2
+  primary: [29, 99, 237] as const,       // #1D63ED — blue
+  primaryDark: [16, 86, 198] as const,   // hsl(217 85% 42%)
+  accent: [70, 140, 246] as const,       // hsl(216 91% 62%) — light blue
+  accentSoft: [234, 241, 255] as const,  // #EAF1FF — primary-soft
+  bg: [247, 248, 250] as const,          // #F7F8FA
   surface: [255, 255, 255] as const,     // #FFFFFF
-  border: [228, 225, 214] as const,      // #E4E1D6
-  textPrimary: [32, 32, 28] as const,    // #20201C
-  textSecondary: [107, 106, 96] as const,// #6B6A60
-  textMuted: [156, 154, 142] as const,   // #9C9A8E
-  success: [59, 109, 17] as const,       // #3B6D11
-  successBg: [234, 243, 222] as const,   // #EAF3DE
-  warning: [133, 79, 11] as const,       // #854F0B
-  warningBg: [250, 238, 218] as const,   // #FAEEDA
-  danger: [163, 45, 45] as const,        // #A32D2D
-  dangerBg: [252, 235, 235] as const,    // #FCEBEB
+  border: [227, 230, 235] as const,      // #E3E6EB
+  textPrimary: [17, 24, 39] as const,    // #111827
+  textSecondary: [91, 100, 114] as const,// #5B6472
+  textMuted: [139, 147, 161] as const,   // #8B93A1
+  success: [15, 157, 88] as const,       // #0F9D58
+  successBg: [235, 242, 235] as const,   // hsl(150 60% 95%)
+  warning: [180, 83, 9] as const,        // #B45309
+  warningBg: [255, 246, 229] as const,   // hsl(38 100% 95%)
+  danger: [220, 38, 38] as const,        // #DC2626
+  dangerBg: [254, 236, 236] as const,    // hsl(0 86% 96%)
   white: [255, 255, 255] as const,
 } as const;
 
@@ -97,7 +97,7 @@ function drawLogoMark(doc: jsPDF, x: number, y: number) {
   doc.setFillColor(255, 255, 255);
   doc.circle(x + LOGO_MARK_SIZE / 2, y + LOGO_MARK_SIZE / 2, 5, "F");
 
-  // Gold accent dot
+  // Accent dot
   doc.setFillColor(C.accent[0], C.accent[1], C.accent[2]);
   doc.circle(x + LOGO_MARK_SIZE / 2, y + LOGO_MARK_SIZE / 2 + 1.5, 1.2, "F");
 }
@@ -434,7 +434,8 @@ export function generateNotaLaporanPDF(data: NotaLaporanData): void {
       fillRect(doc, MARGIN.left, y - 3.5, CONTENT_W, 6, [250, 250, 248]);
     }
 
-    const statusColor = item.status === "SUDAH" ? C.success : C.danger;
+    const isPaid = item.status === "SUDAH";
+    const statusColor = isPaid ? C.success : C.danger;
     const statusLabel = item.status === "SUDAH" ? "LUNAS" : "BELUM";
 
     doc.setFontSize(7.5);
@@ -454,7 +455,7 @@ export function generateNotaLaporanPDF(data: NotaLaporanData): void {
     doc.text(formatRupiah(item.total), cols[6].x, y);
     // Status pill
     const statusW = doc.getStringUnitWidth(statusLabel) * 7.5 / doc.internal.scaleFactor;
-    fillRect(doc, cols[7].x - 1, y - 3, statusW + 6, 5, statusColor[0] === 59 ? C.successBg : C.dangerBg);
+    fillRect(doc, cols[7].x - 1, y - 3, statusW + 6, 5, isPaid ? C.successBg : C.dangerBg);
     rgb(doc, statusColor);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7);

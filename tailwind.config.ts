@@ -25,6 +25,7 @@ export default {
           foreground: "hsl(var(--primary-foreground))",
           glow: "hsl(var(--primary-glow))",
           dark: "hsl(var(--primary-dark))",
+          soft: "hsl(var(--primary-soft))",
         },
         secondary: {
           DEFAULT: "hsl(var(--secondary))",
@@ -45,7 +46,6 @@ export default {
           foreground: "hsl(var(--warning-foreground))",
           bg: "hsl(var(--warning-bg))",
         },
-        gold: "hsl(var(--gold))",
         muted: {
           DEFAULT: "hsl(var(--muted))",
           foreground: "hsl(var(--muted-foreground))",

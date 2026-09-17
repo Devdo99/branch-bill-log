@@ -283,8 +283,20 @@ export default function ManagerInvoices() {
   const unpaidTotal = filtered.filter((i) => i.status === "BELUM").reduce((s, i) => s + Number(i.total), 0);
   const paidPct = totalFiltered > 0 ? Math.round((paidTotal / totalFiltered) * 100) : 0;
 
-  // Peringatan: nota belum bayar & lewat jatuh tempo (mengikuti filter non-status, agar selalu tampil walau tab status sedang "Lunas")
   const todayIso = toISODate(new Date());
+
+  // Hero: rekap bulan berjalan (tidak terpengaruh filter) untuk angka terpenting di atas
+  const monthFromIso = toISODate(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const monthToIso = toISODate(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0));
+  const monthRows = useMemo(() => invs.filter((i) => i.invoice_date >= monthFromIso && i.invoice_date <= monthToIso), [invs, monthFromIso, monthToIso]);
+  const monthTotal = monthRows.reduce((s, i) => s + Number(i.total), 0);
+  const monthCount = monthRows.length;
+  const monthPaidTotal = monthRows.filter((i) => i.status === "SUDAH").reduce((s, i) => s + Number(i.total), 0);
+  const monthUnpaidTotal = monthTotal - monthPaidTotal;
+  const monthOverdueTotal = monthRows.filter((i) => i.status === "BELUM" && i.invoice_date < todayIso).reduce((s, i) => s + Number(i.total), 0);
+
+  // Peringatan: nota belum bayar & lewat jatuh tempo (mengikuti filter non-status, agar selalu tampil walau tab status sedang "Lunas")
+  // Peringatan: nota belum bayar & lewat jatuh tempo (mengikuti filter non-status, agar selalu tampil walau tab status sedang "Lunas")
   const unpaidRows = baseFiltered.filter((i) => i.status === "BELUM");
   const unpaidRowsTotal = unpaidRows.reduce((s, i) => s + Number(i.total), 0);
   const overdueRows = unpaidRows.filter((i) => i.invoice_date < todayIso);
@@ -999,15 +1011,35 @@ export default function ManagerInvoices() {
         </div>
       )}
 
-      {/* Statistik ringkas */}
-      <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard icon={<Receipt className="h-5 w-5" />} label="Jumlah Nota" value={String(filtered.length)} tone="primary" />
-        <StatCard icon={<Wallet className="h-5 w-5" />} label="Total Tagihan" value={formatRupiah(totalFiltered)} tone="primary" />
-        <StatCard icon={<CheckCircle2 className="h-5 w-5" />} label="Sudah Dibayar" value={formatRupiah(paidTotal)} tone="success" />
-        <StatCard icon={<Clock className="h-5 w-5" />} label="Belum Dibayar" value={formatRupiah(unpaidTotal)} tone="warning" />
+      {/* Hero: satu angka terpenting — total tagihan bulan ini, plus breakdown kecil di bawahnya */}
+      <div className="app-card mb-4 overflow-hidden">
+        <div className="flex flex-col gap-4 border-b border-border/60 bg-gradient-to-br from-primary-soft/70 to-card p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <CalendarIcon className="h-3.5 w-3.5 text-primary" />
+              Total tagihan bulan ini
+            </div>
+            <div className="num mt-1 text-3xl font-bold leading-tight text-foreground sm:text-4xl">{formatRupiah(monthTotal)}</div>
+            <div className="mt-1.5 text-xs text-muted-foreground">
+              {monthCount} nota · {formatDate(monthFromIso)} s/d {formatDate(monthToIso)}
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            <Button size="lg" className="h-11 rounded-md bg-primary px-6 text-sm font-semibold text-primary-foreground shadow-elegant hover:bg-primary/90" onClick={() => (window.location.href = "/kasir/input")}>
+              <Plus className="h-5 w-5 mr-1.5" /> Tambah Nota
+            </Button>
+          </div>
+        </div>
+        {/* Breakdown kecil di bawah hero (ukuran jauh lebih kecil dari angka utama) */}
+        <div className="grid grid-cols-2 gap-px bg-border/60 sm:grid-cols-4">
+          <BreakdownItem label="Nota bulan ini" value={String(monthCount)} icon={<Receipt className="h-3.5 w-3.5" />} />
+          <BreakdownItem label="Sudah dibayar" value={formatRupiah(monthPaidTotal)} icon={<CheckCircle2 className="h-3.5 w-3.5" />} tone="success" />
+          <BreakdownItem label="Belum dibayar" value={formatRupiah(monthUnpaidTotal)} icon={<Clock className="h-3.5 w-3.5" />} tone="warning" />
+          <BreakdownItem label="Lewat jatuh tempo" value={formatRupiah(monthOverdueTotal)} icon={<AlertTriangle className="h-3.5 w-3.5" />} tone="danger" />
+        </div>
       </div>
 
-      {/* Panel filter & pencarian (ringkas) */}
+      {/* Panel filter & pencarian — selalu terlihat di atas tabel */}
       <div className="mb-4 rounded-lg border border-border bg-card p-3 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">
           <div className="relative w-44">
@@ -1025,10 +1057,11 @@ export default function ManagerInvoices() {
               {supplierOptions.map((n) => <SelectItem key={n} value={n}>{n}</SelectItem>)}
             </SelectContent>
           </Select>
+          {/* Filter status cepat: warna + ikon + teks (bukan cuma warna) */}
           <div className="flex h-9 items-center gap-0.5 rounded-md bg-muted p-1 text-xs">
             {([
-              { v: "all", label: "Semua", n: statusCounts.all, active: "bg-background text-foreground shadow-sm" },
-              { v: "BELUM", label: "Belum", n: statusCounts.BELUM, active: "bg-warning text-warning-foreground shadow-sm" },
+              { v: "all", label: "Semua", n: statusCounts.all, active: "bg-primary text-primary-foreground shadow-sm" },
+              { v: "BELUM", label: "Belum lunas", n: statusCounts.BELUM, active: "bg-warning text-warning-foreground shadow-sm" },
               { v: "SUDAH", label: "Lunas", n: statusCounts.SUDAH, active: "bg-success text-success-foreground shadow-sm" },
             ] as const).map((c) => (
               <button
@@ -1039,6 +1072,8 @@ export default function ManagerInvoices() {
                   status === c.v ? c.active : "text-muted-foreground hover:text-foreground"
                 }`}
               >
+                {c.v === "SUDAH" && <CheckCircle2 className="mr-1 inline h-3 w-3" />}
+                {c.v === "BELUM" && <Clock className="mr-1 inline h-3 w-3" />}
                 {c.label} <span className="font-normal opacity-70">({c.n})</span>
               </button>
             ))}
@@ -1078,8 +1113,8 @@ export default function ManagerInvoices() {
             </PopoverContent>
           </Popover>
           <div className="ml-auto flex items-baseline gap-2 rounded-md bg-muted/50 px-3 py-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Total</span>
-            <span className="text-sm font-bold tabular-nums text-foreground">{formatRupiah(totalFiltered)}</span>
+            <span className="text-[10px] font-bold tracking-wider text-muted-foreground">Total</span>
+            <span className="num text-sm text-foreground">{formatRupiah(totalFiltered)}</span>
           </div>
         </div>
         {totalFiltered > 0 && (
@@ -1146,7 +1181,7 @@ export default function ManagerInvoices() {
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead className="sticky top-0 z-10 bg-muted text-left">
-              <tr className="text-[10.5px] uppercase tracking-wider text-muted-foreground">
+              <tr className="text-[10.5px] font-semibold tracking-wide text-muted-foreground">
                 <th className="px-3 py-2.5 w-8"><Checkbox checked={allFilteredSelected} onCheckedChange={toggleSelectAll} aria-label="Pilih semua" /></th>
                 <th className="px-3 py-2.5">Bayar</th><th className="px-3 py-2.5">Tanggal</th><th className="px-3 py-2.5">Supplier</th>
                 <th className="px-3 py-2.5">Barang</th><th className="px-3 py-2.5 text-right">Qty</th><th className="px-3 py-2.5 text-right">Harga</th>
@@ -1179,12 +1214,12 @@ export default function ManagerInvoices() {
               ) : filtered.length === 0 ? (
                 <tr>
                   <td colSpan={11}>
-                    <EmptyState
-                      icon={<Receipt className="h-6 w-6" />}
-                      title="Tidak ada nota"
-                      description="Coba ubah filter pencarian atau rentang tanggal."
-                      action={
-                        (supplier || itemQuery || supplierFilter !== "all" || status !== "all" || from || to) ? (
+                    {(supplier || itemQuery || supplierFilter !== "all" || status !== "all" || from || to) ? (
+                      <EmptyState
+                        icon={<Search className="h-6 w-6" />}
+                        title="Tidak ada nota yang cocok dengan filter"
+                        description="Coba ubah kata kunci, status, atau rentang tanggal — atau reset semua filter."
+                        action={
                           <Button variant="outline" size="sm" onClick={() => {
                             setSupplier("");
                             setItemQuery("");
@@ -1195,10 +1230,22 @@ export default function ManagerInvoices() {
                           }}>
                             <RotateCcw className="h-4 w-4 mr-1.5" /> Reset filter
                           </Button>
-                        ) : undefined
-                      }
-                      compact
-                    />
+                        }
+                        compact
+                      />
+                    ) : (
+                      <EmptyState
+                        icon={<Receipt className="h-6 w-6" />}
+                        title={`Belum ada nota bulan ini`}
+                        description="Mulai catat nota pertama Anda — bisa dari kasir atau langsung lewat tombol di bawah."
+                        action={
+                          <Button size="sm" className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => (window.location.href = "/kasir/input")}>
+                            <Plus className="h-4 w-4 mr-1.5" /> Tambah nota baru
+                          </Button>
+                        }
+                        compact
+                      />
+                    )}
                   </td>
                 </tr>
               ) : filtered.map((i) => (
@@ -1648,6 +1695,20 @@ function Row({ k, v }: { k: string; v: React.ReactNode }) {
   return <div className="flex justify-between gap-4"><span className="text-muted-foreground">{k}</span><span className="text-right">{v}</span></div>;
 }
 
+function BreakdownItem({ label, value, icon, tone }: { label: string; value: string; icon: React.ReactNode; tone?: "success" | "warning" | "danger" }) {
+  const toneCls =
+    tone === "success" ? "text-success" :
+    tone === "warning" ? "text-warning" :
+    tone === "danger" ? "text-destructive" :
+    "text-foreground";
+  return (
+    <div className="bg-card px-4 py-3">
+      <div className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">{icon}{label}</div>
+      <div className={`num mt-0.5 text-sm ${toneCls}`}>{value}</div>
+    </div>
+  );
+}
+
 function StatCard({ icon, label, value, tone }: { icon: React.ReactNode; label: string; value: string; tone: "primary" | "success" | "warning" }) {
   const toneCls =
     tone === "success"
@@ -1659,8 +1720,8 @@ function StatCard({ icon, label, value, tone }: { icon: React.ReactNode; label: 
     <div className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3 shadow-sm">
       <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg border ${toneCls}`}>{icon}</div>
       <div className="min-w-0">
-        <div className="truncate text-[10.5px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
-        <div className="truncate text-base font-bold leading-snug tabular-nums text-foreground">{value}</div>
+        <div className="truncate text-[10.5px] font-semibold tracking-wide text-muted-foreground">{label}</div>
+        <div className="num truncate text-base leading-snug text-foreground">{value}</div>
       </div>
     </div>
   );

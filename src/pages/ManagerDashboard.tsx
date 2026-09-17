@@ -306,7 +306,7 @@ export default function ManagerDashboard() {
     .slice(0, 4), [branchInv]);
 
   // Warna chart dari design token (PROGRAMER.md section 1)
-  const COLORS = ["hsl(var(--primary))", "hsl(var(--gold))", "hsl(var(--success))", "hsl(var(--warning))", "hsl(var(--destructive))", "hsl(var(--muted-foreground))"];
+  const COLORS = ["hsl(var(--primary))", "hsl(var(--warning))", "hsl(var(--success))", "hsl(var(--destructive))", "hsl(var(--muted-foreground))", "hsl(var(--primary-glow))"];
 
   if (loading) return <AppShell title="Dashboard"><LoadingPage label="Memuat dashboard…" /></AppShell>;
 
@@ -622,7 +622,7 @@ export default function ManagerDashboard() {
               <Tooltip formatter={(v: number) => formatRupiah(v)} />
               <Legend />
               <Bar dataKey="omset" name="Omset" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="bahan" name="Bahan Baku" fill="hsl(var(--gold))" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="bahan" name="Bahan Baku" fill="hsl(var(--warning))" radius={[4, 4, 0, 0]} />
               <Line type="monotone" dataKey="laba" name="Laba Kotor" stroke="hsl(var(--primary-dark))" strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
@@ -681,7 +681,7 @@ export default function ManagerDashboard() {
               <XAxis dataKey="date" tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} width={70} tickFormatter={(v) => formatRupiahCompact(v)} />
               <Tooltip formatter={(v: number) => formatRupiah(v)} />
-              <Line type="monotone" dataKey="price" name="Harga rata-rata" stroke="hsl(var(--gold))" strokeWidth={2.5} dot={{ r: 3 }} />
+              <Line type="monotone" dataKey="price" name="Harga rata-rata" stroke="hsl(var(--warning))" strokeWidth={2.5} dot={{ r: 3 }} />
             </LineChart>
           </ResponsiveContainer>
         )}
@@ -709,7 +709,7 @@ export default function ManagerDashboard() {
                 <XAxis type="number" tick={{ fontSize: 11 }} tickFormatter={(v) => formatRupiahCompact(v)} />
                 <YAxis type="category" dataKey="item" width={90} tick={{ fontSize: 11 }} />
                 <Tooltip formatter={(v: number) => formatRupiah(v)} />
-                <Bar dataKey="total" fill="hsl(var(--gold))" radius={[0,6,6,0]} />
+                <Bar dataKey="total" fill="hsl(var(--warning))" radius={[0,6,6,0]} />
               </BarChart>
             </ResponsiveContainer>
           )}

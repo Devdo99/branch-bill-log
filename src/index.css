@@ -2,120 +2,127 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design system tokens. All colors use HSL.
-   Palet: Saung by Bebek Belvr (PROGRAMER.md section 1). */
+/* Design system tokens — tema "Clean Blue Ledger".
+   Fokus: kejelasan angka & status untuk data keuangan yang dicek harian.
+   Semua warna memakai HSL. */
 
 @layer base {
   :root {
-    --background: 48 24% 96%;            /* #F7F6F2 */
-    --foreground: 60 7% 12%;             /* #20201C */
+    /* Neutral */
+    --background: 220 20% 98%;            /* #F7F8FA bg halaman */
+    --foreground: 217 33% 11%;            /* #111827 teks utama */
 
-    --card: 0 0% 100%;                   /* #FFFFFF */
-    --card-foreground: 60 7% 12%;
+    --card: 0 0% 100%;                    /* #FFFFFF card/tabel */
+    --card-foreground: 217 33% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 60 7% 12%;
+    --popover-foreground: 217 33% 11%;
 
-    --primary: 67 30% 17%;               /* #1F3A2E hijau tua */
+    /* Primary biru #1D63ED */
+    --primary: 216 91% 52%;               /* #1D63ED */
     --primary-foreground: 0 0% 100%;
-    --primary-dark: 60 29% 12%;          /* #16281F */
-    --primary-glow: 67 30% 26%;
+    --primary-dark: 217 85% 42%;          /* versi hover/darker */
+    --primary-glow: 216 91% 62%;
+    --primary-soft: 218 100% 96%;         /* #EAF1FF highlight baris terpilih / badge info */
 
-    --secondary: 47 22% 92%;
-    --secondary-foreground: 67 30% 17%;
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 217 33% 11%;
 
-    --muted: 48 20% 93%;
-    --muted-foreground: 55 5% 40%;       /* #6B6A60 */
+    --muted: 220 14% 96%;
+    --muted-foreground: 217 9% 40%;       /* #5B6472 teks sekunder */
 
-    --accent: 41 61% 89%;                /* #F4E9D2 accent-soft */
-    --accent-foreground: 67 30% 17%;
-    --gold: 40 56% 51%;                  /* #C99A3E highlight angka penting */
+    --accent: 218 100% 96%;               /* primary-soft sebagai accent */
+    --accent-foreground: 216 91% 38%;
 
-    --success: 65 73% 25%;               /* #3B6D11 */
+    /* Semantic keuangan */
+    --success: 152 83% 34%;               /* #0F9D58 lunas / masuk / sudah dicatat */
     --success-foreground: 0 0% 100%;
-    --success-bg: 86 39% 91%;            /* #EAF3DE */
+    --success-bg: 150 60% 95%;            /* latar badge hijau lembut */
 
-    --warning: 33 85% 28%;               /* #854F0B */
+    --warning: 31 87% 37%;                /* #B45309 belum lunas / menunggu approval */
     --warning-foreground: 0 0% 100%;
-    --warning-bg: 38 76% 92%;            /* #FAEEDA */
+    --warning-bg: 38 100% 95%;            /* latar badge amber lembut */
 
-    --destructive: 0 57% 41%;            /* #A32D2D */
+    --destructive: 0 72% 51%;             /* #DC2626 jatuh tempo / selisih / nota hilang */
     --destructive-foreground: 0 0% 100%;
-    --destructive-bg: 0 74% 95%;         /* #FCEBEB */
+    --destructive-bg: 0 86% 96%;          /* latar badge merah lembut */
 
-    --border: 47 21% 87%;                /* #E4E1D6 */
-    --input: 47 21% 87%;
-    --ring: 40 60% 42%;
+    --border: 220 13% 91%;                /* #E3E6EB */
+    --input: 220 13% 91%;
+    --ring: 216 91% 52%;
 
-    --radius: 0.625rem;                  /* 10px */
+    --radius: 0.625rem;                   /* 10px */
 
     --gradient-primary: linear-gradient(180deg, hsl(var(--primary)), hsl(var(--primary-dark)));
-    --gradient-dark: linear-gradient(180deg, hsl(60 29% 10%), hsl(60 29% 6%));
-    --shadow-elegant: 0 4px 16px hsl(60 7% 12% / 0.08);
-    --shadow-card: 0 1px 2px hsl(60 7% 12% / 0.04), 0 4px 12px hsl(60 7% 12% / 0.04);
+    --gradient-dark: linear-gradient(180deg, hsl(219 45% 14%), hsl(219 50% 9%));
+    --shadow-elegant: 0 4px 16px hsl(217 33% 11% / 0.08);
+    --shadow-card: 0 1px 2px hsl(217 33% 11% / 0.05), 0 4px 12px hsl(217 33% 11% / 0.04);
 
-    --sidebar-background: 60 29% 12%;    /* #16281F */
-    --sidebar-foreground: 48 30% 92%;
-    --sidebar-primary: 40 56% 51%;       /* gold #C99A3E */
-    --sidebar-primary-foreground: 60 29% 12%;
-    --sidebar-accent: 67 28% 20%;
-    --sidebar-accent-foreground: 48 30% 94%;
-    --sidebar-border: 60 25% 18%;
-    --sidebar-ring: 40 56% 55%;
-    --sidebar-glow: 40 60% 50%;
+    /* Sidebar: biru gelap ledger */
+    --sidebar-background: 219 47% 12%;    /* biru gelap #10203F-ish */
+    --sidebar-foreground: 217 30% 92%;
+    --sidebar-primary: 216 91% 60%;       /* biru terang untuk item aktif */
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 219 42% 19%;
+    --sidebar-accent-foreground: 217 30% 94%;
+    --sidebar-border: 219 40% 18%;
+    --sidebar-ring: 216 91% 60%;
+    --sidebar-glow: 216 91% 55%;
   }
 
   .dark {
-    --background: 60 25% 8%;
-    --foreground: 48 25% 92%;
+    --background: 220 25% 7%;
+    --foreground: 217 25% 92%;
 
-    --card: 60 22% 11%;
-    --card-foreground: 48 25% 92%;
+    --card: 220 22% 10%;
+    --card-foreground: 217 25% 92%;
 
-    --popover: 60 22% 11%;
-    --popover-foreground: 48 25% 92%;
+    --popover: 220 22% 10%;
+    --popover-foreground: 217 25% 92%;
 
-    --primary: 67 26% 24%;
+    --primary: 216 91% 58%;
     --primary-foreground: 0 0% 100%;
-    --primary-dark: 60 29% 10%;
+    --primary-dark: 217 85% 46%;
+    --primary-glow: 216 91% 66%;
+    --primary-soft: 219 45% 17%;
 
-    --secondary: 60 20% 16%;
-    --secondary-foreground: 48 25% 90%;
+    --secondary: 220 18% 15%;
+    --secondary-foreground: 217 25% 90%;
 
-    --muted: 60 20% 14%;
-    --muted-foreground: 48 15% 62%;
+    --muted: 220 18% 14%;
+    --muted-foreground: 218 12% 64%;
 
-    --accent: 40 25% 20%;
-    --accent-foreground: 40 60% 75%;
+    --accent: 219 45% 17%;
+    --accent-foreground: 216 91% 74%;
 
-    --success: 65 50% 45%;
+    --success: 152 70% 45%;
     --success-foreground: 0 0% 100%;
-    --success-bg: 65 30% 18%;
+    --success-bg: 152 40% 16%;
 
-    --warning: 33 70% 50%;
-    --warning-foreground: 33 30% 10%;
-    --warning-bg: 33 30% 18%;
+    --warning: 35 85% 55%;
+    --warning-foreground: 31 87% 10%;
+    --warning-bg: 33 40% 16%;
 
-    --destructive: 0 55% 45%;
+    --destructive: 0 70% 55%;
     --destructive-foreground: 0 0% 100%;
-    --destructive-bg: 0 40% 18%;
+    --destructive-bg: 0 45% 17%;
 
-    --border: 60 20% 18%;
-    --input: 60 20% 18%;
-    --ring: 40 60% 55%;
+    --border: 220 16% 18%;
+    --input: 220 16% 18%;
+    --ring: 216 91% 58%;
 
     --shadow-elegant: 0 4px 16px hsl(0 0% 0% / 0.3);
     --shadow-card: 0 1px 2px hsl(0 0% 0% / 0.2);
 
-    --sidebar-background: 60 25% 7%;
-    --sidebar-foreground: 48 25% 90%;
-    --sidebar-primary: 40 56% 55%;
-    --sidebar-primary-foreground: 60 29% 10%;
-    --sidebar-accent: 67 22% 16%;
-    --sidebar-accent-foreground: 48 25% 92%;
-    --sidebar-border: 60 22% 12%;
-    --sidebar-ring: 40 56% 55%;
-    --sidebar-glow: 40 60% 55%;
+    --sidebar-background: 220 30% 8%;
+    --sidebar-foreground: 217 25% 90%;
+    --sidebar-primary: 216 91% 62%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 219 28% 15%;
+    --sidebar-accent-foreground: 217 25% 92%;
+    --sidebar-border: 220 22% 14%;
+    --sidebar-ring: 216 91% 62%;
+    --sidebar-glow: 216 91% 58%;
   }
 }
 
@@ -160,8 +167,8 @@
   .app-sidebar-bg {
     background-color: hsl(var(--sidebar-background));
     background-image:
-      radial-gradient(1100px 420px at 100% -10%, hsl(var(--sidebar-glow) / 0.14), transparent 60%),
-      linear-gradient(180deg, hsl(var(--sidebar-background)) 0%, hsl(60 29% 9%) 100%);
+      radial-gradient(1100px 420px at 100% -10%, hsl(var(--sidebar-glow) / 0.16), transparent 60%),
+      linear-gradient(180deg, hsl(var(--sidebar-background)) 0%, hsl(220 45% 9%) 100%);
   }
 
   /* Biarkan gradien sidebar terlihat: elemen dalam tidak boleh menutup latar */
@@ -183,6 +190,15 @@
 
   .status-pill {
     @apply inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold;
+  }
+
+  /* Angka uang: tabular-nums + sedikit lebih tebal agar cepat dibaca.
+     Pakai untuk SEMUA nominal rupiah. */
+  .num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum";
+    letter-spacing: -0.01em;
+    font-weight: 600;
   }
 }
 
